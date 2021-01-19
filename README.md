@@ -29,8 +29,8 @@ None
 
 
 ## Release Notes
-### Version 2.2.0 
-- Java Detector
+### Version 2.0.0 
+- Java Detector ( Beta version )
 - Cobol enriched metamodel
 
 ## Contributing to the project 
