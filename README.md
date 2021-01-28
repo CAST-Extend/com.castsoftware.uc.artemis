@@ -29,6 +29,10 @@ None
 
 
 ## Release Notes
+## Version 2.1.1 
+- Path changing issues
+- Atlas ready ✅ 
+
 ### Version 2.0.0 
 - Java Detector ( Beta version )
 - Cobol enriched metamodel
