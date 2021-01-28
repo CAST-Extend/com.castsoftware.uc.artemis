@@ -14,18 +14,21 @@ package com.castsoftware.artemis.controllers;
 import com.castsoftware.artemis.config.Configuration;
 import com.castsoftware.artemis.config.UserConfiguration;
 import com.castsoftware.artemis.database.Neo4jAL;
+import com.castsoftware.artemis.exceptions.ProcedureException;
 import com.castsoftware.artemis.exceptions.file.MissingFileException;
 import com.castsoftware.artemis.exceptions.neo4j.Neo4jQueryException;
+import com.castsoftware.artemis.io.Importer;
 import com.castsoftware.artemis.utils.Workspace;
 import org.neo4j.graphdb.Node;
+import org.neo4j.graphdb.Result;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 public class UtilsController {
 
-    public static final String DEMETER_PREFIX = Configuration.get("artemis.tag.demeter_prefix");
 
     /**
      * Change the Artemis default workspace
@@ -33,20 +36,7 @@ public class UtilsController {
      * @return
      */
     public static List<String> setArtemisDirectory(String directoryPath) throws MissingFileException {
-        if (!Files.exists(Path.of(directoryPath))) {
-            return List.of(String.format("'%s' is not a valid path. Make sure the target folder exists and retry.", directoryPath));
-        }
-        // Generate Workspace
-        Configuration.set("artemis.workspace.folder", directoryPath);
-
-        // Validate the workspace
-        List<String> outputMessages = Workspace.validateWorkspace();
-
-        // Reload User configuration
-        UserConfiguration.reload();
-
-        outputMessages.add(String.format("Artemis workspace folder was successfully changed to '%s'.", directoryPath));
-        return outputMessages;
+        return Workspace.setWorkspacePath(directoryPath);
     }
 
     /**
@@ -66,9 +56,10 @@ public class UtilsController {
      * @throws Neo4jQueryException
      */
     public static void applyDemeterTag(Neo4jAL neo4jAL, Node n, String groupName) throws Neo4jQueryException {
+        String demeterPrefix = UserConfiguration.get("demeter.prefix.group_level");
         Long id = n.getId();
         String tagRequest = String.format("MATCH (obj) WHERE ID(obj)=%1$s " +
-                "SET obj.Tags = CASE WHEN obj.Tags IS NULL THEN ['%2$s'] ELSE obj.Tags + '%2$s' END", id, DEMETER_PREFIX+groupName);
+                "SET obj.Tags = CASE WHEN obj.Tags IS NULL THEN ['%2$s'] ELSE obj.Tags + '%2$s' END", id, demeterPrefix+groupName);
         neo4jAL.executeQuery(tagRequest);
     }
 
@@ -80,10 +71,11 @@ public class UtilsController {
      * @throws Neo4jQueryException
      */
     public static void applyDemeterParentTag(Neo4jAL neo4jAL, Node n, String suffix) throws Neo4jQueryException {
+        String demeterPrefix = UserConfiguration.get("demeter.prefix.group_level");
         Long id = n.getId();
         String tagRequest = String.format("MATCH (obj)<-[:Aggregates]-(l:Level5) WHERE ID(obj)=%1$s " +
                 "WITH obj, '%2$s' + l.Name + '%3$s' as tagName " +
-                "SET obj.Tags = CASE WHEN obj.Tags IS NULL THEN [tagName] ELSE obj.Tags + tagName END", id, DEMETER_PREFIX, suffix);
+                "SET obj.Tags = CASE WHEN obj.Tags IS NULL THEN [tagName] ELSE obj.Tags + tagName END", id, demeterPrefix, suffix);
         neo4jAL.executeQuery(tagRequest);
     }
 
@@ -94,9 +86,8 @@ public class UtilsController {
      * @throws MissingFileException
      */
     public static Boolean setOnlineMode(Boolean active) throws MissingFileException {
-        Configuration.set("artemis.onlineMode", active.toString());
-        Configuration.saveAndReload();
-        return Boolean.parseBoolean(Configuration.get("artemis.onlineMode"));
+        UserConfiguration.set("artemis.onlineMode", active.toString());
+        return Boolean.parseBoolean(UserConfiguration.get("artemis.onlineMode"));
     }
 
     /**
@@ -104,7 +95,7 @@ public class UtilsController {
      * @return
      */
     public static Boolean getOnlineMode() {
-        return Boolean.parseBoolean(Configuration.get("artemis.onlineMode"));
+        return Boolean.parseBoolean(UserConfiguration.get("artemis.onlineMode"));
     }
 
     /**
@@ -114,9 +105,8 @@ public class UtilsController {
      * @throws MissingFileException
      */
     public static Boolean setRepositoryMode(Boolean active) throws MissingFileException {
-        Configuration.set("artemis.repository_search", active.toString());
-        Configuration.saveAndReload();
-        return Boolean.parseBoolean(Configuration.get("artemis.repository_search"));
+        UserConfiguration.set("artemis.repository_search", active.toString());
+        return Boolean.parseBoolean(UserConfiguration.get("artemis.repository_search"));
     }
 
     /**
@@ -124,7 +114,7 @@ public class UtilsController {
      * @return
      */
     public static Boolean getRepositoryMode() {
-        return Boolean.parseBoolean(Configuration.get("artemis.repository_search"));
+        return Boolean.parseBoolean(UserConfiguration.get("artemis.repository_search"));
     }
 
     /**
@@ -135,9 +125,8 @@ public class UtilsController {
      * @throws MissingFileException
      */
     public static Boolean setPersistentMode(Boolean active) throws MissingFileException {
-        Configuration.set("artemis.persistent_mode", active.toString());
-        Configuration.saveAndReload();
-        return Boolean.parseBoolean(Configuration.get("artemis.persistent_mode"));
+        UserConfiguration.set("artemis.persistent_mode", active.toString());
+        return Boolean.parseBoolean(UserConfiguration.get("artemis.persistent_mode"));
     }
 
     /**
@@ -145,7 +134,40 @@ public class UtilsController {
      * @return
      */
     public static Boolean getPersistentMode() {
-        return Boolean.parseBoolean(Configuration.get("artemis.persistent_mode"));
+        return Boolean.parseBoolean(UserConfiguration.get("artemis.persistent_mode"));
+    }
+
+    /**
+     * Install the extension
+     * @param neo4jAL Neo4j acces Layer
+     * @param workspacePath Path of the workspace
+     * @return The list of message to follow the different step.
+     * @throws MissingFileException
+     */
+    public static List<String> install(Neo4jAL neo4jAL, String workspacePath) throws MissingFileException {
+        // Set the workspace path
+        List<String> returnList = new ArrayList<>();
+        returnList.addAll(Workspace.setWorkspacePath(workspacePath));
+
+        Path initDataZip = Workspace.getInitDataZip();
+
+        // Import list of frameworks
+        if (Files.exists(initDataZip)) {
+            try {
+                returnList.add("Initialisation data were discovered.");
+                Importer importer = new Importer(neo4jAL);
+                importer.load(initDataZip.toString());
+                returnList.add("Initialisation was successful !");
+            } catch (Exception  | ProcedureException e) {
+                returnList.add("The import of the data failed. If the Demeter extension is not present, make sure you installed the 'Friendly exporter'.");
+                returnList.add("The import of the data failed for the following reason: " + e.getLocalizedMessage());
+            }
+
+        } else {
+            returnList.add("The Initialisation was skipped due to missing files");
+        }
+
+        return returnList;
     }
 
 }

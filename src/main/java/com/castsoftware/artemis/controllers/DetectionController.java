@@ -84,14 +84,14 @@ public class DetectionController {
      * @throws IOException
      */
     public static List<FrameworkResult> launchDetection(Neo4jAL neo4jAL, String application, String language, Boolean flagNodes)
-            throws Neo4jQueryException, IOException, MissingFileException, NLPIncorrectConfigurationException, GoogleBadResponseCodeException {
+            throws Neo4jQueryException, IOException {
 
         List<FrameworkNode> frameworkList = getFrameworkList(neo4jAL, application, SupportedLanguage.getLanguage(language));
         List<FrameworkResult> resultList = new ArrayList<>();
 
         // Convert the framework detected to Framework Results
-        for (FrameworkNode fb : frameworkList) {
-            FrameworkResult fr = new FrameworkResult(fb.getName(), fb.getDescription(), fb.getCategory(), fb.getFrameworkType().toString());
+        for (FrameworkNode fn : frameworkList) {
+            FrameworkResult fr = new FrameworkResult(fn);
             resultList.add(fr);
         }
 
@@ -147,8 +147,8 @@ public class DetectionController {
         }
 
 
-        for (FrameworkNode fb : frameworkList) {
-            FrameworkResult fr = new FrameworkResult(fb.getName(), fb.getDescription(), fb.getCategory(), fb.getFrameworkType().toString());
+        for (FrameworkNode fn : frameworkList) {
+            FrameworkResult fr = new FrameworkResult(fn);
             resultList.add(fr);
         }
 

@@ -12,6 +12,7 @@
 package com.castsoftware.artemis.detector.cobol;
 
 import com.castsoftware.artemis.config.Configuration;
+import com.castsoftware.artemis.config.UserConfiguration;
 import com.castsoftware.artemis.controllers.UtilsController;
 import com.castsoftware.artemis.database.Neo4jAL;
 import com.castsoftware.artemis.datasets.FrameworkNode;
@@ -26,6 +27,7 @@ import com.castsoftware.artemis.interactions.famililes.FamilyGroup;
 import com.castsoftware.artemis.nlp.SupportedLanguage;
 import com.castsoftware.artemis.nlp.model.NLPResults;
 import com.castsoftware.artemis.nlp.parser.GoogleResult;
+import com.castsoftware.artemis.sof.SystemOfFramework;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.TransactionTerminatedException;
 
@@ -57,12 +59,20 @@ public class CobolDetector extends ADetector {
     }
   }
 
+  public void createSystemOfFrameworks(List<FrameworkNode> frameworkNodeList) {
+    SystemOfFramework sof = new SystemOfFramework(this.neo4jAL, SupportedLanguage.COBOL, this.application, frameworkNodeList);
+    sof.run();
+  }
+
   /** Launch the detection */
   @Override
   public List<FrameworkNode> launch() throws IOException, Neo4jQueryException {
+
     int numTreated = 0;
-    boolean onlineMode = Boolean.parseBoolean(Configuration.get("artemis.onlineMode"));
-    boolean learningMode = Boolean.parseBoolean(Configuration.get("artemis.learning_mode"));
+
+    // Get configuration
+    boolean onlineMode = Boolean.parseBoolean(UserConfiguration.get("artemis.onlineMode"));
+    boolean learningMode = Boolean.parseBoolean(UserConfiguration.get("artemis.learning_mode"));
 
     neo4jAL.logInfo(String.format("Launching artemis detection for Cobol."));
     neo4jAL.logInfo(
@@ -149,6 +159,7 @@ public class CobolDetector extends ADetector {
         }
       }
 
+
     } catch (TransactionTerminatedException e) {
       neo4jAL.logError("The detection was interrupted. Saving the results...", e);
     } finally {
@@ -158,8 +169,10 @@ public class CobolDetector extends ADetector {
 
     // Launch internal framework detector on remaining nodes
     if (languageProperties.getInteractionDetector()) {
-      getInternalFramework(neo4jAL, notDetected);
+      //getInternalFramework(neo4jAL, notDetected);
+      createSystemOfFrameworks(frameworkNodeList);
     }
+
 
     return frameworkNodeList;
   }
