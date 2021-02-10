@@ -12,33 +12,43 @@
 package com.castsoftware.artemis.nlp;
 
 public enum SupportedLanguage {
-    COBOL("Cobol"),
-    JAVA("Java"),
-    ALL("All");
+  COBOL("Cobol"),
+  JAVA("Java"),
+  NET("Net"),
+  ALL("All");
 
-    private String value;
+  private String value;
 
-    @Override
-    public String toString() {
-        return this.value;
+  SupportedLanguage(String value) {
+    this.value = value;
+  }
+
+  /**
+   * Get the Language based on the String provided
+   *
+   * @param type
+   * @return
+   */
+  public static SupportedLanguage getLanguage(String type) {
+    for (SupportedLanguage ft : SupportedLanguage.values()) {
+      if (type.toLowerCase().equals(ft.toString().toLowerCase())) {
+        return ft;
+      }
     }
+    return ALL;
+  }
 
-    /**
-     * Get the Language based on the String provided
-     * @param type
-     * @return
-     */
-    public static SupportedLanguage getLanguage(String type) {
-        for(SupportedLanguage ft : SupportedLanguage.values()) {
-            if(type.toLowerCase().equals(ft.toString().toLowerCase())) {
-                return ft;
-            }
-        }
+  /**
+   * Check the existence of a language
+   * @param language Language to search
+   * @return
+   */
+  public static Boolean has(String language) {
+    return getLanguage(language) != ALL;
+  }
 
-        return ALL;
-    }
-
-    SupportedLanguage(String value) {
-        this.value = value;
-    }
+  @Override
+  public String toString() {
+    return this.value;
+  }
 }

@@ -16,6 +16,7 @@ import com.castsoftware.artemis.database.Neo4jAL;
 import com.castsoftware.artemis.exceptions.ProcedureException;
 import com.castsoftware.artemis.exceptions.neo4j.Neo4jConnectionError;
 import com.castsoftware.artemis.exceptions.neo4j.Neo4jQueryException;
+import com.castsoftware.artemis.results.InteractionResult;
 import com.castsoftware.artemis.results.OutputMessage;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Transaction;
@@ -27,32 +28,30 @@ import java.util.stream.Stream;
 
 public class InteractionsProcedure {
 
-    @Context
-    public GraphDatabaseService db;
+  @Context public GraphDatabaseService db;
 
-    @Context
-    public Transaction transaction;
+  @Context public Transaction transaction;
 
-    @Context
-    public Log log;
+  @Context public Log log;
 
-    @Procedure(value = "artemis.get.interactions", mode = Mode.WRITE)
-    @Description("artemis.get.interactions(String ApplicationContext, String language, Boolean flagNodes) - Get the interactions in an application")
-    public Stream<OutputMessage> launchDetection(@Name(value = "ApplicationContext") String applicationContext,
-                                                 @Name(value = "Language") String language,
-                                                 @Name(value = "FlagNodes", defaultValue = "false") Boolean flagNodes) throws ProcedureException {
+  @Procedure(value = "artemis.interactions.search", mode = Mode.WRITE)
+  @Description(
+      "artemis.interactions.search(String Applications, String language, String search) - Search the presence of a pattern in applications")
+  public Stream<InteractionResult> searchInteractions(
+      @Name(value = "Applications") List<String> applications,
+      @Name(value = "Language") String language,
+      @Name(value = "ToSearch") String toSearch)
+      throws ProcedureException {
 
-        try {
-            Neo4jAL nal = new Neo4jAL(db, transaction, log);
-            List<OutputMessage> detectedFrameworks = InteractionsController.launchDetection(nal, applicationContext, language, flagNodes);
+    try {
+      Neo4jAL nal = new Neo4jAL(db, transaction, log);
+      List<InteractionResult> detectedInteraction = InteractionsController.getInteraction(nal, applications, language, toSearch);
 
-            return detectedFrameworks.stream();
-        } catch (Exception | Neo4jConnectionError | Neo4jQueryException e) {
-            ProcedureException ex = new ProcedureException(e);
-            log.error("An error occurred while executing the procedure", e);
-            throw ex;
-        }
-
+      return detectedInteraction.stream();
+    } catch (Exception | Neo4jConnectionError | Neo4jQueryException e) {
+      ProcedureException ex = new ProcedureException(e);
+      log.error("An error occurred while executing the procedure", e);
+      throw ex;
     }
-
+  }
 }

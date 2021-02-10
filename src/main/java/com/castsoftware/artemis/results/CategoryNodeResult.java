@@ -9,11 +9,19 @@
  *
  */
 
-package com.castsoftware.artemis.oracle;
+package com.castsoftware.artemis.results;
 
-import com.mashape.unirest.http.JsonNode;
+import com.castsoftware.artemis.datasets.CategoryNode;
 
-public class OracleResponse {
-    public String data;
-    public JsonNode message;
+public class CategoryNodeResult {
+  public Long id;
+  public String name;
+  public String iconUrl;
+
+  public CategoryNodeResult(CategoryNode n) {
+    assert n.getNode() != null : "Cannot create a CategoryNodeResult from a non-initialized node";
+    this.id = n.getId();
+    this.name = n.getName();
+    this.iconUrl = n.getIconUrl();
+  }
 }

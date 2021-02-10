@@ -18,6 +18,9 @@ import com.castsoftware.artemis.config.UserConfiguration;
 import com.castsoftware.artemis.database.Neo4jAL;
 import com.castsoftware.artemis.datasets.FrameworkNode;
 import com.castsoftware.artemis.datasets.FrameworkType;
+import com.castsoftware.artemis.detector.cobol.CobolDetector;
+import com.castsoftware.artemis.detector.java.JavaDetector;
+import com.castsoftware.artemis.detector.net.NetDetector;
 import com.castsoftware.artemis.exceptions.dataset.InvalidDatasetException;
 import com.castsoftware.artemis.exceptions.neo4j.Neo4jQueryException;
 import com.castsoftware.artemis.nlp.SupportedLanguage;
@@ -27,7 +30,7 @@ import com.castsoftware.artemis.nlp.model.NLPEngine;
 import com.castsoftware.artemis.nlp.model.NLPResults;
 import com.castsoftware.artemis.nlp.parser.GoogleParser;
 import com.castsoftware.artemis.nlp.saver.NLPSaver;
-import com.castsoftware.artemis.oracle.OracleCom;
+import com.castsoftware.artemis.pythia.PythiaCom;
 import com.castsoftware.artemis.reports.ReportGenerator;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Result;
@@ -63,12 +66,52 @@ public abstract class ADetector {
   protected List<FrameworkNode> frameworkNodeList;
   protected NLPEngine nlpEngine;
   protected NLPSaver nlpSaver;
-  protected OracleCom oracleCom;
+  protected PythiaCom pythiaCom;
 
   protected GoogleParser googleParser;
   protected LanguageProp languageProperties;
 
+  /**
+   * Detector constructor
+   *
+   * @param neo4jAL Neo4j Access Layer
+   * @param application Name of the application
+   * @param language Language
+   * @throws IOException
+   * @throws Neo4jQueryException
+   */
+  public ADetector(Neo4jAL neo4jAL, String application, SupportedLanguage language)
+      throws IOException, Neo4jQueryException {
+    this.neo4jAL = neo4jAL;
+    this.application = application;
+    this.toInvestigateNodes = new ArrayList<>();
+    this.nlpSaver = new NLPSaver(application);
+    this.pythiaCom = PythiaCom.getInstance(neo4jAL);
+
+    // Shuffle nodes to avoid being bust by the google bot detector
+    Collections.shuffle(this.toInvestigateNodes);
+
+    // Make sure the nlp is trained, train it otherwise
+    this.nlpEngine = new NLPEngine(neo4jAL.getLogger(), language);
+
+    Path modelFile = this.nlpEngine.checkIfModelExists();
+    if (!Files.exists(modelFile)) {
+      this.nlpEngine.train();
+    }
+
+    this.reportGenerator = new ReportGenerator(application);
+    this.googleParser = new GoogleParser(neo4jAL.getLogger());
+    this.frameworkNodeList = new ArrayList<>();
+
+    LanguageConfiguration lc = LanguageConfiguration.getInstance();
+    this.languageProperties = lc.getLanguageProperties(language.toString());
+
+    getNodes();
+  }
+
   public abstract List<FrameworkNode> launch() throws IOException, Neo4jQueryException;
+  public abstract ATree getBreakdown();
+
 
   /**
    * Save NLP Results to the Artemis Database. The target database will be decided depending on the
@@ -82,8 +125,8 @@ public abstract class ADetector {
       throws Neo4jQueryException {
     boolean persistentMode = Boolean.parseBoolean(UserConfiguration.get("artemis.persistent_mode"));
 
-    Date date = Calendar.getInstance().getTime();
     DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+    Date date = Calendar.getInstance().getTime();
     String strDate = dateFormat.format(date);
 
     FrameworkType fType = null;
@@ -106,7 +149,15 @@ public abstract class ADetector {
     }
 
     FrameworkNode fb =
-        new FrameworkNode(neo4jAL, name, strDate, "No location discovered", "", 1L, detectionScore);
+        new FrameworkNode(
+            neo4jAL,
+            name,
+            strDate,
+            "No location discovered",
+            "",
+            1L,
+            detectionScore,
+            new Date().getTime());
     fb.setFrameworkType(fType);
     fb.setInternalType(internalType);
 
@@ -116,14 +167,14 @@ public abstract class ADetector {
     }
 
     // If the Oracle communication is up, send the framework to the oracle
-    if (oracleCom.isConnected()) {
+    if (pythiaCom.isConnected() && fb.getFrameworkType() == FrameworkType.FRAMEWORK) {
       try {
-        oracleCom.addFramework(fb);
+        pythiaCom.addFramework(fb);
       } catch (Exception e) {
         neo4jAL.logError("Failed to send the framework to the oracle.", e);
       }
     } else {
-      oracleCom.getStatus();
+      pythiaCom.getStatus();
     }
 
     return fb;
@@ -168,40 +219,35 @@ public abstract class ADetector {
   }
 
   /**
-   * Detector constructor
-   *
+   * Get the detector based on the language and the application
    * @param neo4jAL Neo4j Access Layer
    * @param application Name of the application
-   * @param language Language
+   * @param language Language of the detector
+   * @return
    * @throws IOException
    * @throws Neo4jQueryException
    */
-  public ADetector(Neo4jAL neo4jAL, String application, SupportedLanguage language)
-      throws IOException, Neo4jQueryException {
-    this.neo4jAL = neo4jAL;
-    this.application = application;
-    this.toInvestigateNodes = new ArrayList<>();
-    this.nlpSaver = new NLPSaver(application);
-    this.oracleCom = OracleCom.getInstance(neo4jAL.getLogger());
+  public static ADetector getDetector(
+          Neo4jAL neo4jAL, String application, SupportedLanguage language)
+          throws IOException, Neo4jQueryException {
 
-    // Shuffle nodes to avoid being bust by the google bot detector
-    Collections.shuffle(this.toInvestigateNodes);
-
-    // Make sure the nlp is trained, train it otherwise
-    this.nlpEngine = new NLPEngine(neo4jAL.getLogger(), language);
-
-    Path modelFile = this.nlpEngine.checkIfModelExists();
-    if (!Files.exists(modelFile)) {
-      this.nlpEngine.train();
+    ADetector aDetector;
+    switch (language) {
+      case COBOL:
+        aDetector = new CobolDetector(neo4jAL, application);
+        break;
+      case JAVA:
+        aDetector = new JavaDetector(neo4jAL, application);
+        break;
+      case NET:
+        aDetector = new NetDetector(neo4jAL, application);
+        break;
+      default:
+        throw new IllegalArgumentException(
+                String.format("The language is not currently supported %s", language.toString()));
     }
-
-    this.reportGenerator = new ReportGenerator(application);
-    this.googleParser = new GoogleParser(neo4jAL.getLogger());
-    this.frameworkNodeList = new ArrayList<>();
-
-    LanguageConfiguration lc = LanguageConfiguration.getInstance();
-    this.languageProperties = lc.getLanguageProperties(language.toString());
-
-    getNodes();
+    return aDetector;
   }
+
+
 }

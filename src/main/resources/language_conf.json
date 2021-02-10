@@ -1,22 +1,63 @@
 {
-  "COBOL" : {
+  "COBOL": {
     "name": "Cobol",
-    "objects_internal_type": ["CAST_COBOL_SavedFileDescription", "CAST_COBOL_ExternalFilePrototype" ,"CAST_COBOL_SavedProgram", "CAST_COBOL_ProgramPrototype", "CAST_CICS_TransactionPrototype"],
+    "objects_internal_type": [
+      "CAST_COBOL_SavedFileDescription",
+      "CAST_COBOL_ExternalFilePrototype",
+      "CAST_COBOL_SavedProgram",
+      "CAST_COBOL_ProgramPrototype",
+      "CAST_CICS_TransactionPrototype"
+    ],
     "online_search": true,
     "interaction_detector": false,
     "package_delimiter": "",
     "repository_search": [],
-    "keywords" : "IBM Knowledge Center|Knowledge Center",
-    "nlp_model" : "artemis_cobol_model.bin"
+    "keywords": "IBM Knowledge Center|Knowledge Center",
+    "nlp_model": "artemis_cobol_model.bin"
   },
-  "JAVA" : {
+  "JAVA": {
     "name": "Java",
-    "objects_internal_type": ["JV_CLASS", "JV_INTERFACE"],
+    "objects_internal_type": [
+      "JV_CLASS",
+      "JV_INTERFACE"
+    ],
+    "online_search": true,
+    "interaction_detector": false,
+    "package_delimiter": ".",
+    "repository_search": [
+      "Maven",
+      "Github"
+    ],
+    "keywords": "maven|stackoverflow|github",
+    "nlp_model": "artemis_java_model.bin"
+  },
+
+  "NET": {
+    "name": "Net",
+    "objects_internal_type": [
+      "CAST_DotNet_ClassCSharp",
+      "CAST_DotNet_EnumerationCSharp",
+      "CAST_DotNet_InterfaceCSharp",
+      "CAST_DotNet_ClassExternal",
+      "CAST_DotNet_ClassCSharpDataSet",
+      "CAST_DotNet_ClassCSharpComponent",
+      "CAST_DotNet_SOAP_Proxy",
+      "CAST_DotNet_SOAP_Server",
+      "CAST_DotNet_ClassCSharpInstaller",
+      "CAST_DotNet_ClassCSharpCustomAttribute",
+      "CAST_DotNet_ClassExternalCustomAttribute",
+      "CAST_DotNet_ClassCSharpServicedComponent",
+      "CAST_DotNet_ClassCSharpException",
+      "CAST_DotNet_ClassCSharpWebServiceProxy",
+      "CAST_DotNet_AsmxFile",
+      "CAST_DotNet_ClassCSharpWebService",
+      "CAST_DotNet_ClassCSharpServiceBase"
+    ],
     "online_search": false,
     "interaction_detector": false,
     "package_delimiter": ".",
-    "repository_search": ["Maven", "Github"],
-    "keywords": "maven|stackoverflow|github",
-    "nlp_model" : "artemis_java_model.bin"
+    "repository_search": [],
+    "keywords": "nuget|github",
+    "nlp_model": "artemis_net_model.bin"
   }
 }

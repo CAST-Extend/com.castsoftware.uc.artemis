@@ -2,20 +2,32 @@
  * Copyright (C) 2020  Hugo JOBY
  *
  *  This library is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the Free Software Foundation; either version 3 of the License, or (at your option) any later version.
- *  
+ *
  *  This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty ofnMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNUnLesser General Public License v3 for more details.
- *  
+ *
  *  You should have received a copy of the GNU Lesser General Public v3 License along with this library; if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  *
  */
 
 package com.castsoftware.artemis.detector.java;
 
-public class FrameworkTree {
+import com.castsoftware.artemis.detector.ATree;
+
+import java.util.Arrays;
+
+public class FrameworkTree extends ATree {
 
   private static String PACKAGE_DELIMITER = "\\.";
 
   private FrameworkTreeLeaf root;
+
+  public FrameworkTree() {
+    this.root = new FrameworkTreeLeaf("", "");
+  }
+
+  public String getDelimiterLeaves() {
+    return ".";
+  }
 
   /**
    * Recursively insert the package in the tree
@@ -23,12 +35,20 @@ public class FrameworkTree {
    * @param leaf Leaf to insert the package
    * @param packageName Name of the package to insert
    */
-  private void recInsert(FrameworkTreeLeaf leaf, String packageName) {
+  private void recInsert(
+      FrameworkTreeLeaf leaf, String packageName, String fullName, Integer depth) {
     String[] splitPackageName = packageName.split(PACKAGE_DELIMITER, 2);
 
     // If the split contains for than one element continue
 
     String name = splitPackageName[0];
+
+    if (fullName.isEmpty()) {
+      fullName = name;
+    } else {
+      fullName = String.join(".", fullName, name);
+    }
+
     FrameworkTreeLeaf matchingLeaf = null;
 
     // Check if a package already exist or create it
@@ -41,13 +61,15 @@ public class FrameworkTree {
 
     // If a matching leaf wasn't found, create a new one
     if (matchingLeaf == null) {
-      matchingLeaf = new FrameworkTreeLeaf(name);
+      matchingLeaf = new FrameworkTreeLeaf(name, fullName);
       // Add the leaf to the tree
       leaf.addLeaf(matchingLeaf);
     }
 
+    matchingLeaf.setDepth(depth);
+
     if (splitPackageName.length > 1) {
-      recInsert(matchingLeaf, splitPackageName[1]);
+      recInsert(matchingLeaf, splitPackageName[1], fullName, depth + 1);
     }
   }
 
@@ -57,7 +79,16 @@ public class FrameworkTree {
    * @param packageName Full name of the package to insert
    */
   public void insert(String packageName) {
-    this.recInsert(root, packageName);
+    this.recInsert(root, packageName, "", 1);
+  }
+
+  /**
+   * Get the root of the tree
+   *
+   * @return
+   */
+  public FrameworkTreeLeaf getRoot() {
+    return root;
   }
 
   /**
@@ -67,7 +98,16 @@ public class FrameworkTree {
    * @param level
    */
   private void printTree(FrameworkTreeLeaf fl, int level) {
-    System.out.print("|" + "__".repeat(level) + " : " + fl.getName() + "\n");
+    System.out.print(
+        "|"
+            + "__".repeat(level)
+            + " : "
+            + fl.getName()
+            + "  ::  "
+            + fl.getDepth()
+            + " :: "
+            + Arrays.toString(fl.getDetectionResults())
+            + "\n");
     for (FrameworkTreeLeaf clf : fl.getChildren()) {
       printTree(clf, level + 1);
     }
@@ -76,9 +116,5 @@ public class FrameworkTree {
   /** Print the tree */
   public void print() {
     printTree(root, 0);
-  }
-
-  public FrameworkTree() {
-    this.root = new FrameworkTreeLeaf("");
   }
 }

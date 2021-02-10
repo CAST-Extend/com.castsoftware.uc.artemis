@@ -11,44 +11,38 @@
 
 package com.castsoftware.artemis.procedures.api;
 
-import com.castsoftware.artemis.controllers.api.FrameworksController;
 import com.castsoftware.artemis.controllers.api.LanguageController;
-import com.castsoftware.artemis.database.Neo4jAL;
-import com.castsoftware.artemis.datasets.FrameworkNode;
 import com.castsoftware.artemis.exceptions.ProcedureException;
-import com.castsoftware.artemis.exceptions.neo4j.Neo4jBadNodeFormatException;
-import com.castsoftware.artemis.exceptions.neo4j.Neo4jConnectionError;
-import com.castsoftware.artemis.exceptions.neo4j.Neo4jQueryException;
-import com.castsoftware.artemis.results.FrameworkResult;
 import com.castsoftware.artemis.results.OutputMessage;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.logging.Log;
-import org.neo4j.procedure.*;
+import org.neo4j.procedure.Context;
+import org.neo4j.procedure.Description;
+import org.neo4j.procedure.Mode;
+import org.neo4j.procedure.Procedure;
 
 import java.util.List;
 import java.util.stream.Stream;
 
 public class LanguageApiProcedure {
-    @Context
-    public GraphDatabaseService db;
+  @Context public GraphDatabaseService db;
 
-    @Context public Transaction transaction;
+  @Context public Transaction transaction;
 
-    @Context public Log log;
+  @Context public Log log;
 
-    @Procedure(value = "artemis.get.supported.languages", mode = Mode.WRITE)
-    @Description(
-            "artemis.get.supported.languages() - Get the list of supported languages")
-    public Stream<OutputMessage> getSupportedLanguages() throws ProcedureException {
+  @Procedure(value = "artemis.get.supported.languages", mode = Mode.WRITE)
+  @Description("artemis.get.supported.languages() - Get the list of supported languages")
+  public Stream<OutputMessage> getSupportedLanguages() throws ProcedureException {
 
-        try {
-            List<String> languages = LanguageController.getSupportedLanguages();
-            return languages.stream().map(OutputMessage::new);
-        } catch (Exception e) {
-            ProcedureException ex = new ProcedureException(e);
-            log.error("An error occurred while executing the procedure", e);
-            throw ex;
-        }
+    try {
+      List<String> languages = LanguageController.getSupportedLanguages();
+      return languages.stream().map(OutputMessage::new);
+    } catch (Exception e) {
+      ProcedureException ex = new ProcedureException(e);
+      log.error("An error occurred while executing the procedure", e);
+      throw ex;
     }
+  }
 }
