@@ -13,8 +13,6 @@ package com.castsoftware.artemis.detector.java;
 
 import com.castsoftware.artemis.detector.ATree;
 
-import java.util.Arrays;
-
 public class FrameworkTree extends ATree {
 
   private static String PACKAGE_DELIMITER = "\\.";
@@ -23,10 +21,6 @@ public class FrameworkTree extends ATree {
 
   public FrameworkTree() {
     this.root = new FrameworkTreeLeaf("", "");
-  }
-
-  public String getDelimiterLeaves() {
-    return ".";
   }
 
   /**
@@ -67,6 +61,7 @@ public class FrameworkTree extends ATree {
     }
 
     matchingLeaf.setDepth(depth);
+    matchingLeaf.addOneChild();
 
     if (splitPackageName.length > 1) {
       recInsert(matchingLeaf, splitPackageName[1], fullName, depth + 1);
@@ -82,6 +77,10 @@ public class FrameworkTree extends ATree {
     this.recInsert(root, packageName, "", 1);
   }
 
+  public String getDelimiterLeaves() {
+    return ".";
+  }
+
   /**
    * Get the root of the tree
    *
@@ -89,6 +88,11 @@ public class FrameworkTree extends ATree {
    */
   public FrameworkTreeLeaf getRoot() {
     return root;
+  }
+
+  /** Print the tree */
+  public void print() {
+    printTree(root, 0);
   }
 
   /**
@@ -105,16 +109,11 @@ public class FrameworkTree extends ATree {
             + fl.getName()
             + "  ::  "
             + fl.getDepth()
-            + " :: "
-            + Arrays.toString(fl.getDetectionResults())
+            + " :: Num children "
+            + fl.getNumChildren()
             + "\n");
     for (FrameworkTreeLeaf clf : fl.getChildren()) {
       printTree(clf, level + 1);
     }
-  }
-
-  /** Print the tree */
-  public void print() {
-    printTree(root, 0);
   }
 }

@@ -21,6 +21,7 @@ import com.castsoftware.artemis.exceptions.neo4j.Neo4jQueryException;
 import com.castsoftware.artemis.io.Importer;
 import com.castsoftware.artemis.utils.Workspace;
 import org.neo4j.graphdb.Node;
+import org.neo4j.graphdb.Result;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -35,8 +36,9 @@ public class UtilsController {
    * @param directoryPath The new Artemis workspace
    * @return
    */
-  public static List<String> setArtemisDirectory(String directoryPath) throws MissingFileException {
-    return Workspace.setWorkspacePath(directoryPath);
+  public static List<String> setArtemisDirectory(Neo4jAL neo4jAL, String directoryPath)
+      throws MissingFileException {
+    return Workspace.setWorkspacePath(neo4jAL, directoryPath);
   }
 
   /**
@@ -44,27 +46,129 @@ public class UtilsController {
    *
    * @return
    */
-  public static String getArtemisDirectory() {
-    return Configuration.get("artemis.workspace.folder");
+  public static String getArtemisDirectory(Neo4jAL neo4jAL) {
+    return Workspace.getWorkspacePath(neo4jAL).toAbsolutePath().toString();
   }
 
   /**
-   * Apply a demeter tag to the object using its parent level
+   * Apply a demeter level tag to the object
    *
    * @param neo4jAL Neo4j access layer
    * @param n Node to tag
    * @param groupName Name of the group
    * @throws Neo4jQueryException
    */
-  public static void applyDemeterTag(Neo4jAL neo4jAL, Node n, String groupName)
+  public static void applyDemeterLevelTag(Neo4jAL neo4jAL, Node n, String groupName)
       throws Neo4jQueryException {
-    String demeterPrefix = UserConfiguration.get("demeter.prefix.group_level");
+    String demeterLevelPrefix =
+        Configuration.getBestOfAllWorlds(neo4jAL, "demeter.prefix.group_level");
+    applyTag(neo4jAL, n, groupName, demeterLevelPrefix);
+  }
+
+  /**
+   * Apply a tag on an object
+   *
+   * @param neo4jAL Neo4j Access Layer
+   * @param n Node
+   * @param groupName Name of the group
+   * @param tagPrefix Demeter prefix
+   * @throws Neo4jQueryException
+   */
+  private static void applyTag(Neo4jAL neo4jAL, Node n, String groupName, String tagPrefix)
+      throws Neo4jQueryException {
     Long id = n.getId();
     String tagRequest =
         String.format(
             "MATCH (obj) WHERE ID(obj)=%1$s "
                 + "SET obj.Tags = CASE WHEN obj.Tags IS NULL THEN ['%2$s'] ELSE obj.Tags + '%2$s' END",
-            id, demeterPrefix + groupName);
+            id, tagPrefix + groupName);
+    neo4jAL.executeQuery(tagRequest);
+  }
+
+  /**
+   * Apply a module tag to the object
+   *
+   * @param neo4jAL Neo4j Access Layer
+   * @param n Node to tag
+   * @param groupName Name of the group
+   * @throws Neo4jQueryException
+   */
+  public static void applyDemeterModuleTag(Neo4jAL neo4jAL, Node n, String groupName)
+      throws Neo4jQueryException {
+    String demeterModulePrefix =
+        Configuration.getBestOfAllWorlds(neo4jAL, "demeter.prefix.group_module");
+    applyTag(neo4jAL, n, groupName, demeterModulePrefix);
+  }
+
+  /**
+   * Apply a architecture tag to the object
+   *
+   * @param neo4jAL Neo4j Access Layer
+   * @param n Node to tag
+   * @param groupName Name of the group
+   * @throws Neo4jQueryException
+   */
+  public static void applyDemeterArchitectureTag(Neo4jAL neo4jAL, Node n, String groupName)
+      throws Neo4jQueryException {
+    String demeterModulePrefix =
+        Configuration.getBestOfAllWorlds(neo4jAL, "demeter.prefix.group_architecture");
+    applyTag(neo4jAL, n, groupName, demeterModulePrefix + "Artemis$");
+  }
+
+  public static void applyDemeterViewTag(Neo4jAL neo4jAL, Node n, String groupName)
+      throws Neo4jQueryException {
+    return;
+  }
+
+  /**
+   * Apply the demeter level tags on the group matchin the regexes
+   *
+   * @param neo4jAL Neo4j Access Mayer
+   * @param regex Regular expression matching the fullname
+   * @param groupName Name of the group created
+   * @throws Neo4jQueryException
+   */
+  public static void applyDemeterTagRegexFullName(Neo4jAL neo4jAL, String regex, String groupName)
+      throws Neo4jQueryException {
+    String demeterPrefix = UserConfiguration.get(neo4jAL, "demeter.prefix.group_level");
+    String tagRequest =
+        String.format(
+            "MATCH (obj) WHERE obj.FullName=~'%1$s' "
+                + "SET obj.Tags = CASE WHEN obj.Tags IS NULL THEN ['%2$s'] ELSE obj.Tags + '%2$s' END",
+            regex, demeterPrefix + groupName);
+    neo4jAL.executeQuery(tagRequest);
+  }
+
+  public static void applyModuleTagRegexFullName(Neo4jAL neo4jAL, String regex, String groupName)
+      throws Neo4jQueryException {
+    String demeterPrefix = "$m_";
+    String tagRequest =
+        String.format(
+            "MATCH (obj) WHERE obj.FullName CONTAINS '%1$s' "
+                + "SET obj.Tags = CASE WHEN obj.Tags IS NULL THEN ['%2$s'] ELSE obj.Tags + '%2$s' END",
+            regex, demeterPrefix + groupName);
+    neo4jAL.executeQuery(tagRequest);
+  }
+
+  public static void applyArchitectureTagRegexFullName(
+      Neo4jAL neo4jAL, String regex, String viewName, String groupName) throws Neo4jQueryException {
+    String demeterPrefix = "$a_";
+    String tagRequest =
+        String.format(
+            "MATCH (obj:Object) WHERE obj.FullName CONTAINS '%1$s' "
+                + "SET obj.Tags = CASE WHEN obj.Tags IS NULL THEN ['%2$s'] ELSE obj.Tags + '%2$s' END",
+            regex, demeterPrefix + viewName + "$" + groupName);
+    neo4jAL.executeQuery(tagRequest);
+  }
+
+  public static void applyLevelTagRegexFullName(Neo4jAL neo4jAL, String regex, String groupName)
+      throws Neo4jQueryException {
+    String demeterPrefix = UserConfiguration.get(neo4jAL, "demeter.prefix.group_level");
+    String tagRequest =
+        String.format(
+            "MATCH (obj:Object) WHERE obj.FullName CONTAINS '%1$s' "
+                + "SET obj.Tags = CASE WHEN obj.Tags IS NULL THEN ['%2$s'] ELSE obj.Tags + '%2$s' END",
+            regex, demeterPrefix + groupName);
     neo4jAL.executeQuery(tagRequest);
   }
 
@@ -74,19 +178,23 @@ public class UtilsController {
    * @param neo4jAL Neo4j access Layer
    * @param n Node to tag
    * @param suffix Suffix to append to the group
+   * @return The name of the level created
    * @throws Neo4jQueryException
    */
-  public static void applyDemeterParentTag(Neo4jAL neo4jAL, Node n, String suffix)
+  public static String applyDemeterParentTag(Neo4jAL neo4jAL, Node n, String suffix)
       throws Neo4jQueryException {
-    String demeterPrefix = UserConfiguration.get("demeter.prefix.group_level");
+    String demeterPrefix = UserConfiguration.get(neo4jAL, "demeter.prefix.group_level");
     Long id = n.getId();
     String tagRequest =
         String.format(
             "MATCH (obj)<-[:Aggregates]-(l:Level5) WHERE ID(obj)=%1$s "
-                + "WITH obj, '%2$s' + l.Name + '%3$s' as tagName "
-                + "SET obj.Tags = CASE WHEN obj.Tags IS NULL THEN [tagName] ELSE obj.Tags + tagName END",
+                + "WITH obj, '%2$s' + l.Name + '%3$s' as tagName, l.Name + '%3$s' as groupName "
+                + "SET obj.Tags = CASE WHEN obj.Tags IS NULL THEN [tagName] ELSE obj.Tags + tagName END return groupName",
             id, demeterPrefix, suffix);
-    neo4jAL.executeQuery(tagRequest);
+    Result res = neo4jAL.executeQuery(tagRequest);
+    if (!res.hasNext()) return "";
+
+    return (String) res.next().get("groupName");
   }
 
   /**
@@ -96,9 +204,11 @@ public class UtilsController {
    * @return The new state of the online mode
    * @throws MissingFileException
    */
-  public static Boolean setOnlineMode(Boolean active) throws MissingFileException {
-    UserConfiguration.set("artemis.onlineMode", active.toString());
-    return Boolean.parseBoolean(UserConfiguration.get("artemis.onlineMode"));
+  public static Boolean setOnlineMode(Neo4jAL neo4jAL, Boolean active) throws MissingFileException {
+    if (UserConfiguration.isLoaded()) {
+      UserConfiguration.set(neo4jAL, "artemis.onlineMode", active.toString());
+    }
+    return Boolean.parseBoolean(UserConfiguration.get(neo4jAL, "artemis.onlineMode"));
   }
 
   /**
@@ -106,8 +216,8 @@ public class UtilsController {
    *
    * @return
    */
-  public static Boolean getOnlineMode() {
-    return Boolean.parseBoolean(UserConfiguration.get("artemis.onlineMode"));
+  public static Boolean getOnlineMode(Neo4jAL neo4jAL) {
+    return Boolean.parseBoolean(UserConfiguration.get(neo4jAL, "artemis.onlineMode"));
   }
 
   /**
@@ -117,9 +227,14 @@ public class UtilsController {
    * @return The new state of the repository mode
    * @throws MissingFileException
    */
-  public static Boolean setRepositoryMode(Boolean active) throws MissingFileException {
-    UserConfiguration.set("artemis.repository_search", active.toString());
-    return Boolean.parseBoolean(UserConfiguration.get("artemis.repository_search"));
+  public static Boolean setRepositoryMode(Neo4jAL neo4jAL, Boolean active)
+      throws MissingFileException {
+
+    if (UserConfiguration.isLoaded()) {
+      UserConfiguration.set(neo4jAL, "artemis.repository_search", active.toString());
+    }
+
+    return Boolean.parseBoolean(UserConfiguration.get(neo4jAL, "artemis.repository_search"));
   }
 
   /**
@@ -127,8 +242,8 @@ public class UtilsController {
    *
    * @return
    */
-  public static Boolean getRepositoryMode() {
-    return Boolean.parseBoolean(UserConfiguration.get("artemis.repository_search"));
+  public static Boolean getRepositoryMode(Neo4jAL neo4jAL) {
+    return Boolean.parseBoolean(UserConfiguration.get(neo4jAL, "artemis.repository_search"));
   }
 
   /**
@@ -139,9 +254,13 @@ public class UtilsController {
    * @return The new value of the Persistent mode
    * @throws MissingFileException
    */
-  public static Boolean setPersistentMode(Boolean active) throws MissingFileException {
-    UserConfiguration.set("artemis.persistent_mode", active.toString());
-    return Boolean.parseBoolean(UserConfiguration.get("artemis.persistent_mode"));
+  public static Boolean setPersistentMode(Neo4jAL neo4jAL, Boolean active)
+      throws MissingFileException {
+    if (UserConfiguration.isLoaded()) {
+      UserConfiguration.set(neo4jAL, "artemis.persistent_mode", active.toString());
+    }
+
+    return Boolean.parseBoolean(UserConfiguration.get(neo4jAL, "artemis.persistent_mode"));
   }
 
   /**
@@ -149,8 +268,32 @@ public class UtilsController {
    *
    * @return
    */
-  public static Boolean getPersistentMode() {
-    return Boolean.parseBoolean(UserConfiguration.get("artemis.persistent_mode"));
+  public static Boolean getPersistentMode(Neo4jAL neo4jAL) {
+    return Boolean.parseBoolean(UserConfiguration.get(neo4jAL, "artemis.persistent_mode"));
+  }
+
+  /**
+   * Set the value of the learning mode. In learning mode the query will be saved to be reprocessed
+   *
+   * @param active
+   * @return
+   * @throws MissingFileException
+   */
+  public static Boolean setLearningMode(Neo4jAL neo4jAL, Boolean active)
+      throws MissingFileException {
+    if (UserConfiguration.isLoaded()) {
+      UserConfiguration.set(neo4jAL, "artemis.learning_mode", active.toString());
+    }
+    return Boolean.parseBoolean(UserConfiguration.get(neo4jAL, "artemis.learning_mode"));
+  }
+
+  /**
+   * Get the value of the Persistent mode parameter
+   *
+   * @return
+   */
+  public static Boolean getLearningMode(Neo4jAL neo4jAL) {
+    return Boolean.parseBoolean(UserConfiguration.get(neo4jAL, "artemis.learning_mode"));
   }
 
   /**
@@ -165,9 +308,9 @@ public class UtilsController {
       throws MissingFileException, Neo4jQueryException {
     // Set the workspace path
     List<String> returnList = new ArrayList<>();
-    returnList.addAll(Workspace.setWorkspacePath(workspacePath));
+    returnList.addAll(Workspace.setWorkspacePath(neo4jAL, workspacePath));
 
-    Path initDataZip = Workspace.getInitDataZip();
+    Path initDataZip = Workspace.getInitDataZip(neo4jAL);
 
     // Import list of frameworks
     if (Files.exists(initDataZip)) {

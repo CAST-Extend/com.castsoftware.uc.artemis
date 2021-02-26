@@ -12,6 +12,7 @@
 package com.castsoftware.artemis.nlp.parser;
 
 import com.castsoftware.artemis.config.Configuration;
+import com.castsoftware.artemis.database.Neo4jAL;
 import com.castsoftware.artemis.exceptions.google.GoogleBadResponseCodeException;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -47,32 +48,9 @@ public class GoogleParser {
   private Log log;
   private HeaderGenerator headerGenerator;
 
-  public GoogleParser(Log log) throws IOException {
-    this.log = log;
-    this.headerGenerator = HeaderGenerator.getInstance();
-  }
-
-  /**
-   * Get Random number following a normal law arrival
-   *
-   * @param mean Mean of the poisson law
-   * @return
-   */
-  private static int getNormalLawArrival(double mean, double std) {
-    Random r = new Random();
-    double delay = r.nextGaussian() * std + mean;
-    return (int) Math.round(delay);
-  }
-
-  /** Wait to avoid Google Bot detector to reject the query */
-  private void botBusterWait() {
-    try {
-      int delay = getNormalLawArrival(1200, 500);
-      if (delay < 0) delay = 1500;
-      log.info("Will wait : " + delay + " ms");
-      Thread.sleep(delay);
-    } catch (InterruptedException ignore) {
-    }
+  public GoogleParser(Neo4jAL neo4jAL) throws IOException {
+    this.log = neo4jAL.getLogger();
+    this.headerGenerator = HeaderGenerator.getInstance(neo4jAL);
   }
 
   public GoogleResult request(String query) throws IOException, GoogleBadResponseCodeException {
@@ -122,6 +100,8 @@ public class GoogleParser {
       }
     }
 
+    // log.info("The request returned \n \n " + response.toString() + " \n \n ");
+
     StringBuilder fullResults = new StringBuilder();
 
     // Analyze response with JSOUP
@@ -131,6 +111,10 @@ public class GoogleParser {
 
     // Get the title and verify the presence of blacklisted words in the first 4 elements
     List<Element> titles = document.getElementsByClass("rc");
+    if (titles.isEmpty()) {
+      titles.addAll(document.getElementsByClass("g"));
+    }
+
     googleResult.setNumberResult(titles.size());
 
     int itTitle = 0;
@@ -201,5 +185,28 @@ public class GoogleParser {
     googleResult.setContent(res.replaceAll("\\s{2,}", ""));
 
     return googleResult;
+  }
+
+  /** Wait to avoid Google Bot detector to reject the query */
+  private void botBusterWait() {
+    try {
+      int delay = getNormalLawArrival(1200, 500);
+      if (delay < 0) delay = 1500;
+      log.info("Will wait : " + delay + " ms");
+      Thread.sleep(delay);
+    } catch (InterruptedException ignore) {
+    }
+  }
+
+  /**
+   * Get Random number following a normal law arrival
+   *
+   * @param mean Mean of the poisson law
+   * @return
+   */
+  private static int getNormalLawArrival(double mean, double std) {
+    Random r = new Random();
+    double delay = r.nextGaussian() * std + mean;
+    return (int) Math.round(delay);
   }
 }

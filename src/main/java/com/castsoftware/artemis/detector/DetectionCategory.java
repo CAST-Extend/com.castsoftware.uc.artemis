@@ -9,20 +9,24 @@
  *
  */
 
-package com.castsoftware.artemis.results;
+package com.castsoftware.artemis.detector;
 
-import com.castsoftware.artemis.detector.ALeaf;
+public enum DetectionCategory {
+  KNOWN_UTILITY("Known utility"),
+  KNOWN_NOT_UTILITY("Known not utility"),
+  UNKNOWN_UTILITY("Unknown utility"),
+  UNKNOWN_NOT_UTILITY("Unknown not utility"),
+  IN_OTHERS_APPLICATIONS("In others applications"),
+  MISSING_CODE("Potentially missing code");
 
-public class LeafResult {
-  public Long id;
-  public String name;
-  public Long parentId;
-  public String delimiter;
+  private String value;
 
-  public LeafResult(ALeaf aLeaf, String delimiter) {
-    this.id = aLeaf.getId();
-    this.name = aLeaf.getName();
-    this.parentId = aLeaf.getParentId();
-    this.delimiter = delimiter;
+  DetectionCategory(String value) {
+    this.value = value;
+  }
+
+  @Override
+  public String toString() {
+    return this.value;
   }
 }

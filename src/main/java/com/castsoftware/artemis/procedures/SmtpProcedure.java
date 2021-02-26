@@ -53,9 +53,10 @@ public class SmtpProcedure {
       @Name(value = "ListRecipients") String listRecipients) throws ProcedureException {
 
     try {
-      Boolean success = SmtpController.setMailsRecipients(listRecipients);
+      Neo4jAL nal = new Neo4jAL(db, transaction, log);
+      Boolean success = SmtpController.setMailsRecipients(nal, listRecipients);
       return Stream.of(new BooleanResult(success));
-    } catch (Exception e) {
+    } catch (Exception | Neo4jConnectionError e) {
       ProcedureException ex = new ProcedureException(e);
       log.error("An error occurred while executing the procedure", e);
       throw ex;
@@ -69,18 +70,6 @@ public class SmtpProcedure {
       Neo4jAL nal = new Neo4jAL(db, transaction, log);
       return SmtpController.getMailConfiguration(nal).stream().map(OutputMessage::new);
     } catch (Exception | Neo4jConnectionError e) {
-      ProcedureException ex = new ProcedureException(e);
-      log.error("An error occurred while executing the procedure", e);
-      throw ex;
-    }
-  }
-
-  @Procedure(value = "artemis.mail.testMailCampaign", mode = Mode.WRITE)
-  @Description("artemis.mail.testMailCampaign() - Get the configuration of the SMTP server.")
-  public void testMailCampaign() throws ProcedureException {
-    try {
-      SmtpController.testMailCampaign();
-    } catch (Exception e) {
       ProcedureException ex = new ProcedureException(e);
       log.error("An error occurred while executing the procedure", e);
       throw ex;

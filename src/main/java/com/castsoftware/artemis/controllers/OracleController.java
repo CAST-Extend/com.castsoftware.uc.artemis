@@ -20,6 +20,7 @@ import com.castsoftware.artemis.exceptions.neo4j.Neo4jBadNodeFormatException;
 import com.castsoftware.artemis.exceptions.neo4j.Neo4jQueryException;
 import com.castsoftware.artemis.pythia.PythiaCom;
 
+import java.util.Collections;
 import java.util.Date;
 
 public class OracleController {
@@ -63,9 +64,9 @@ public class OracleController {
             new Date().getTime());
     CategoryNode cn = CategoryController.getOrCreateByName(neo4jAL, "Test Category");
     fn.setCategory(cn);
-    fn.setInternalType("Internal Type");
+    fn.setInternalTypes(Collections.singletonList("Internal Type"));
     fn.setFrameworkType(FrameworkType.NOT_KNOWN);
 
-    return PythiaCom.getInstance(neo4jAL).addFramework(fn);
+    return PythiaCom.getInstance(neo4jAL).sendFramework(fn);
   }
 }

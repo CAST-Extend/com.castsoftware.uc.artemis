@@ -12,14 +12,14 @@
 package com.castsoftware.artemis.controllers;
 
 import com.castsoftware.artemis.config.Configuration;
-import com.castsoftware.artemis.config.LanguageConfiguration;
+import com.castsoftware.artemis.config.detection.DetectionParameters;
+import com.castsoftware.artemis.config.detection.DetectionProp;
+import com.castsoftware.artemis.config.detection.LanguageConfiguration;
 import com.castsoftware.artemis.database.Neo4jAL;
 import com.castsoftware.artemis.datasets.FrameworkNode;
 import com.castsoftware.artemis.detector.ADetector;
-import com.castsoftware.artemis.detector.cobol.CobolDetector;
-import com.castsoftware.artemis.detector.java.JavaDetector;
 import com.castsoftware.artemis.exceptions.file.MissingFileException;
-import com.castsoftware.artemis.exceptions.google.GoogleBadResponseCodeException;
+import com.castsoftware.artemis.exceptions.neo4j.Neo4jBadRequestException;
 import com.castsoftware.artemis.exceptions.neo4j.Neo4jQueryException;
 import com.castsoftware.artemis.exceptions.nlp.NLPIncorrectConfigurationException;
 import com.castsoftware.artemis.nlp.SupportedLanguage;
@@ -30,7 +30,7 @@ import org.neo4j.graphdb.Result;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.stream.Collectors;
 
 public class DetectionController {
   // Artemis properties
@@ -47,6 +47,58 @@ public class DetectionController {
   private static LanguageConfiguration languageConfiguration = LanguageConfiguration.getInstance();
 
   /**
+   * Train the NLP engine of Artemis
+   *
+   * @param neo4jAL Neo4j Access Layer
+   * @throws IOException
+   * @throws NLPIncorrectConfigurationException
+   */
+  public static void trainArtemis(Neo4jAL neo4jAL)
+      throws IOException, NLPIncorrectConfigurationException {
+    NLPEngine nlpEngine = new NLPEngine(neo4jAL, SupportedLanguage.ALL);
+    nlpEngine.train();
+  }
+
+  /**
+   * Launch a detection on all application present in the database
+   *
+   * @param neo4jAL Neo4j Access Layer
+   * @param language Language used for the detection
+   */
+  @Deprecated
+  public static List<FrameworkResult> launchBulkDetection(
+      Neo4jAL neo4jAL, String language, Boolean flagNodes)
+      throws Neo4jQueryException, IOException, Neo4jBadRequestException, MissingFileException {
+    List<FrameworkResult> resultList = new ArrayList<>();
+
+    // Application
+    String reqAppName =
+        "MATCH (o:Object) RETURN DISTINCT [ x IN LABELS(o) WHERE NOT x='Object' ][0] as appName";
+    Result res = neo4jAL.executeQuery(reqAppName);
+
+    List<String> appNameList = new ArrayList<>();
+    while (res.hasNext()) {
+      appNameList.add((String) res.next().get("appName"));
+    }
+
+    neo4jAL.logInfo(
+        String.format(
+            "Launching the analysis on applications : %s", String.join(", ", appNameList)));
+
+    DetectionProp detectionProp = DetectionParameters.getUserOrDefault(neo4jAL);
+
+    for (String appName : appNameList) {
+      resultList.addAll(
+          getFrameworkList(neo4jAL, appName, SupportedLanguage.getLanguage(language), detectionProp)
+              .stream()
+              .map(FrameworkResult::new)
+              .collect(Collectors.toList()));
+    }
+
+    return resultList;
+  }
+
+  /**
    * Get the list of detected framework inside the provided list of node
    *
    * @param neo4jAL Neo4j access Layer
@@ -57,10 +109,10 @@ public class DetectionController {
    * @throws Neo4jQueryException
    */
   private static List<FrameworkNode> getFrameworkList(
-      Neo4jAL neo4jAL, String application, SupportedLanguage language)
-      throws IOException, Neo4jQueryException {
+      Neo4jAL neo4jAL, String application, SupportedLanguage language, DetectionProp detectionProp)
+      throws IOException, Neo4jQueryException, Neo4jBadRequestException, MissingFileException {
 
-    ADetector aDetector = ADetector.getDetector(neo4jAL, application, language);
+    ADetector aDetector = ADetector.getDetector(neo4jAL, application, language, detectionProp);
     return aDetector.launch();
   }
 
@@ -75,79 +127,22 @@ public class DetectionController {
    * @throws IOException
    */
   public static List<FrameworkResult> launchDetection(
-      Neo4jAL neo4jAL, String application, String language, Boolean flagNodes)
-      throws Neo4jQueryException, IOException {
+      Neo4jAL neo4jAL, String application, String language, String detectionPropAsJson)
+      throws Neo4jQueryException, IOException, Neo4jBadRequestException, MissingFileException {
+
+    DetectionProp detectionProp;
+    if (!detectionPropAsJson.isBlank()) {
+      detectionProp = DetectionParameters.deserializeOrDefault(detectionPropAsJson);
+    } else {
+      detectionProp = DetectionParameters.getUserOrDefault(neo4jAL);
+    }
 
     List<FrameworkNode> frameworkList =
-        getFrameworkList(neo4jAL, application, SupportedLanguage.getLanguage(language));
+        getFrameworkList(
+            neo4jAL, application, SupportedLanguage.getLanguage(language), detectionProp);
     List<FrameworkResult> resultList = new ArrayList<>();
 
     // Convert the framework detected to Framework Results
-    for (FrameworkNode fn : frameworkList) {
-      FrameworkResult fr = new FrameworkResult(fn);
-      resultList.add(fr);
-    }
-
-    return resultList;
-  }
-
-  /**
-   * Train the NLP engine of Artemis
-   *
-   * @param neo4jAL Neo4j Access Layer
-   * @throws IOException
-   * @throws NLPIncorrectConfigurationException
-   */
-  public static void trainArtemis(Neo4jAL neo4jAL)
-      throws IOException, NLPIncorrectConfigurationException {
-    NLPEngine nlpEngine = new NLPEngine(neo4jAL.getLogger(), SupportedLanguage.ALL);
-    nlpEngine.train();
-  }
-
-  /**
-   * Launch a detection on all application present in the database
-   *
-   * @param neo4jAL Neo4j Access Layer
-   * @param language Language used for the detection
-   */
-  @Deprecated
-  public static List<FrameworkResult> launchBulkDetection(
-      Neo4jAL neo4jAL, String language, Boolean flagNodes)
-      throws Neo4jQueryException, MissingFileException, IOException,
-          NLPIncorrectConfigurationException, GoogleBadResponseCodeException {
-    List<FrameworkResult> resultList = new ArrayList<>();
-    List<String> appNameList = new ArrayList<>();
-
-    // Get language
-    SupportedLanguage sLanguage = SupportedLanguage.getLanguage(language);
-    neo4jAL.logInfo(
-        String.format("Starting Artemis bulk detection on language '%s'...", sLanguage.toString()));
-
-    String appNameRequest =
-        String.format(
-            "MATCH (a:%1$s) WITH a.Name as appName  MATCH (obj:%2$s) WHERE appName IN LABELS(obj)  AND  obj.Type CONTAINS '%3$s' RETURN appName, COUNT(obj) as countObj;",
-            IMAGING_APPLICATION_LABEL, IMAGING_OBJECT_LABEL, language);
-    neo4jAL.logInfo("Request to execute : " + appNameRequest);
-
-    // Get the List of application
-    Result resAppName = neo4jAL.executeQuery(appNameRequest);
-    while (resAppName.hasNext()) {
-      Map<String, Object> res = resAppName.next();
-      String app = (String) res.get("appName");
-      Long countObj = (Long) res.get("countObj");
-
-      neo4jAL.logInfo(
-          String.format(
-              "Application with name '%s' contains %d potential candidates.", app, countObj));
-
-      appNameList.add(app);
-    }
-
-    List<FrameworkNode> frameworkList = new ArrayList<>();
-    for (String name : appNameList) {
-      frameworkList.addAll(getFrameworkList(neo4jAL, name, sLanguage));
-    }
-
     for (FrameworkNode fn : frameworkList) {
       FrameworkResult fr = new FrameworkResult(fn);
       resultList.add(fr);

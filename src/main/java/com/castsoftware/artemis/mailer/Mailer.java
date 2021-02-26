@@ -11,16 +11,7 @@
 
 package com.castsoftware.artemis.mailer;
 
-import com.castsoftware.artemis.config.UserConfiguration;
-
-import javax.mail.Message;
-import javax.mail.Session;
-import javax.mail.Transport;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeMessage;
-import java.util.Properties;
-
-public class Mailer {
+/* public class Mailer {
 
   static final String FROM = UserConfiguration.get("smtp.mail.username");
   static final String FROMNAME = UserConfiguration.get("smtp.mail.displayed_name");
@@ -50,20 +41,17 @@ public class Mailer {
     return Session.getDefaultInstance(props);
   }
 
-  private static Message buildMessage(Session session, String to, String subject, String body)
-      throws Exception {
-    // Create a message with the specified information.
-    MimeMessage msg = new MimeMessage(session);
-    msg.setFrom(new InternetAddress(FROM, FROMNAME));
-    msg.setRecipient(Message.RecipientType.TO, new InternetAddress(to));
-    msg.setSubject(subject);
-    msg.setContent(body, "text/html");
+  public static void bulkMail() throws Exception {
+    if (RECIPIENT_LIST == null) {
+      return;
+    }
 
-    // Add a configuration set header. Comment or delete the
-    // next line if you are not using a configuration set
-    msg.setHeader("X-SES-CONFIGURATION-SET", CONFIGSET);
-
-    return msg;
+    String subject = "Failed to analyze application : Wealthcare";
+    String body = MailerTemplate.generateFailureMail("Wealthcare", new Exception("Test"));
+    String[] recipientList = RECIPIENT_LIST.split(",");
+    for (String recipient : recipientList) {
+      sendMail(recipient, subject, body);
+    }
   }
 
   public static void sendMail(String to, String subject, String body) throws Exception {
@@ -95,16 +83,20 @@ public class Mailer {
     }
   }
 
-  public static void bulkMail() throws Exception {
-    if (RECIPIENT_LIST == null) {
-      return;
-    }
+  private static Message buildMessage(Session session, String to, String subject, String body)
+      throws Exception {
+    // Create a message with the specified information.
+    MimeMessage msg = new MimeMessage(session);
+    msg.setFrom(new InternetAddress(FROM, FROMNAME));
+    msg.setRecipient(Message.RecipientType.TO, new InternetAddress(to));
+    msg.setSubject(subject);
+    msg.setContent(body, "text/html");
 
-    String subject = "Failed to analyze application : Wealthcare";
-    String body = MailerTemplate.generateFailureMail("Wealthcare", new Exception("Test"));
-    String[] recipientList = RECIPIENT_LIST.split(",");
-    for (String recipient : recipientList) {
-      sendMail(recipient, subject, body);
-    }
+    // Add a configuration set header. Comment or delete the
+    // next line if you are not using a configuration set
+    msg.setHeader("X-SES-CONFIGURATION-SET", CONFIGSET);
+
+    return msg;
   }
 }
+*/

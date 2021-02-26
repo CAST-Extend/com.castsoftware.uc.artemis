@@ -9,8 +9,9 @@
  *
  */
 
-package com.castsoftware.artemis.config;
+package com.castsoftware.artemis.config.detection;
 
+import com.castsoftware.artemis.config.Configuration;
 import com.castsoftware.artemis.exceptions.file.MissingFileException;
 import com.castsoftware.artemis.nlp.SupportedLanguage;
 import com.google.gson.Gson;
@@ -51,8 +52,6 @@ public class LanguageConfiguration {
 
       // Convert input stream to Json
       while ((inputStr = streamReader.readLine()) != null) responseStrBuilder.append(inputStr);
-
-      System.out.println("JSON :" + responseStrBuilder.toString());
       JSONObject jsonConfig = new JSONObject(responseStrBuilder.toString());
 
       // Iterate over Json keys and feed languageMap
@@ -87,7 +86,7 @@ public class LanguageConfiguration {
 
         languageMap.put(key, lp);
         // Print the JSON detected
-        System.out.println("Detected : " + lp.toString());
+        System.out.println("LANGUAGE PROP : Configuration loaded for : " + lp.getName());
       }
 
     } catch (IOException | MissingFileException ex) {
@@ -101,15 +100,8 @@ public class LanguageConfiguration {
     return instance;
   }
 
-  /**
-   * Check the existence of a Language in the configuration
-   *
-   * @param language Language to search in the configuration
-   * @return True if the language exist, False otherwise
-   */
-  public boolean checkLanguageExistence(String language) {
-    language = language.toUpperCase();
-    return languageMap.containsKey(language);
+  public LanguageProp getLanguageProperties(SupportedLanguage language) {
+    return getLanguageProperties(language.toString());
   }
 
   /**
@@ -124,8 +116,15 @@ public class LanguageConfiguration {
     return languageMap.get(language);
   }
 
-  public LanguageProp getLanguageProperties(SupportedLanguage language) {
-    return getLanguageProperties(language.toString());
+  /**
+   * Check the existence of a Language in the configuration
+   *
+   * @param language Language to search in the configuration
+   * @return True if the language exist, False otherwise
+   */
+  public boolean checkLanguageExistence(String language) {
+    language = language.toUpperCase();
+    return languageMap.containsKey(language);
   }
 
   /**

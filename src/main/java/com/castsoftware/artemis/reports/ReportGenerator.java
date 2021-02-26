@@ -12,6 +12,7 @@
 package com.castsoftware.artemis.reports;
 
 import com.castsoftware.artemis.config.Configuration;
+import com.castsoftware.artemis.database.Neo4jAL;
 import com.castsoftware.artemis.datasets.FrameworkNode;
 import com.castsoftware.artemis.utils.Workspace;
 import org.apache.poi.hssf.usermodel.HSSFSheet;
@@ -60,12 +61,6 @@ public class ReportGenerator {
     this.addCastDivider("ARTEMIS Framework Detector", 4);
   }
 
-  private Integer getAndIncrementRow() {
-    Integer actual = rowNumber;
-    rowNumber++;
-    return actual;
-  }
-
   /**
    * Add a CAST divider
    *
@@ -88,6 +83,12 @@ public class ReportGenerator {
     return mainSheet;
   }
 
+  private Integer getAndIncrementRow() {
+    Integer actual = rowNumber;
+    rowNumber++;
+    return actual;
+  }
+
   /**
    * Add results to the Report
    *
@@ -108,44 +109,15 @@ public class ReportGenerator {
   }
 
   /**
-   * Write the framework to the worksheet
-   *
-   * @param fb Framework Bean to write
-   */
-  private void writeFrameworkBean(FrameworkNode fb) {
-    Integer rowNum = getAndIncrementRow();
-    Row row = mainSheet.createRow(rowNum);
-
-    row.createCell(0).setCellValue(fb.getName());
-    row.createCell(1).setCellValue(fb.getDiscoveryDate());
-    row.createCell(2).setCellValue(fb.getDescription());
-    row.createCell(3).setCellValue(fb.getLocation());
-    row.createCell(4).setCellValue(fb.getNumberOfDetection());
-    row.createCell(5).setCellValue(fb.getNumberOfDetection());
-  }
-
-  /** Write the framework bean headers to the worksheet */
-  private void writeFrameworkBeanHeaders() {
-    Integer rowNum = getAndIncrementRow();
-    Row row = mainSheet.createRow(rowNum);
-
-    row.createCell(0).setCellValue("Name");
-    row.createCell(1).setCellValue("Discovery Date");
-    row.createCell(2).setCellValue("Description");
-    row.createCell(3).setCellValue("Location");
-    row.createCell(4).setCellValue("Number of detection");
-    row.createCell(5).setCellValue("Percentage of detection");
-  }
-
-  /**
    * Generate the Excel report using the timestamp
    *
    * @return
    * @throws IOException
    */
-  public void generate() throws IOException {
+  public void generate(Neo4jAL neo4jAL) throws IOException {
     Path reportFolderPath =
-        Workspace.getWorkspacePath().resolve(Configuration.get("artemis.reports_generator.folder"));
+        Workspace.getWorkspacePath(neo4jAL)
+            .resolve(Configuration.get("artemis.reports_generator.folder"));
 
     if (!Files.exists(reportFolderPath)) {
       Files.createDirectories(reportFolderPath);
@@ -189,5 +161,35 @@ public class ReportGenerator {
       workbook.write(outputStream);
       workbook.close();
     }
+  }
+
+  /** Write the framework bean headers to the worksheet */
+  private void writeFrameworkBeanHeaders() {
+    Integer rowNum = getAndIncrementRow();
+    Row row = mainSheet.createRow(rowNum);
+
+    row.createCell(0).setCellValue("Name");
+    row.createCell(1).setCellValue("Discovery Date");
+    row.createCell(2).setCellValue("Description");
+    row.createCell(3).setCellValue("Location");
+    row.createCell(4).setCellValue("Number of detection");
+    row.createCell(5).setCellValue("Percentage of detection");
+  }
+
+  /**
+   * Write the framework to the worksheet
+   *
+   * @param fb Framework Bean to write
+   */
+  private void writeFrameworkBean(FrameworkNode fb) {
+    Integer rowNum = getAndIncrementRow();
+    Row row = mainSheet.createRow(rowNum);
+
+    row.createCell(0).setCellValue(fb.getName());
+    row.createCell(1).setCellValue(fb.getDiscoveryDate());
+    row.createCell(2).setCellValue(fb.getDescription());
+    row.createCell(3).setCellValue(fb.getLocation());
+    row.createCell(4).setCellValue(fb.getNumberOfDetection());
+    row.createCell(5).setCellValue(fb.getNumberOfDetection());
   }
 }

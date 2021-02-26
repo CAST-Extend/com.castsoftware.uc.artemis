@@ -2,11 +2,20 @@
   "COBOL": {
     "name": "Cobol",
     "objects_internal_type": [
-      "CAST_COBOL_SavedFileDescription",
       "CAST_COBOL_ExternalFilePrototype",
-      "CAST_COBOL_SavedProgram",
+      "CAST_COBOL_GenericData",
+      "CAST_COBOL_Literal",
       "CAST_COBOL_ProgramPrototype",
-      "CAST_CICS_TransactionPrototype"
+      "CAST_COBOL_SavedConditionalTest",
+      "CAST_COBOL_SavedDeclaratives",
+      "CAST_COBOL_SavedDeclarativesParagraph",
+      "CAST_COBOL_SavedDeclarativesSection",
+      "CAST_COBOL_SavedFileDescription",
+      "CAST_COBOL_SavedParagraph",
+      "CAST_COBOL_SavedProgram",
+      "CAST_COBOL_SavedSection",
+      "CAST_COBOL_SortDescription",
+      "CAST_COBOL_UtilityProgram"
     ],
     "online_search": true,
     "interaction_detector": false,
@@ -19,7 +28,13 @@
     "name": "Java",
     "objects_internal_type": [
       "JV_CLASS",
-      "JV_INTERFACE"
+      "JV_INTERFACE",
+      "JV_CLASS",
+      "JV_GENERIC_CLASS",
+      "JV_GENERIC_INTERFACE",
+      "JV_ENUM",
+      "JV_INTERFACE",
+      "JV_EJB_GROUP"
     ],
     "online_search": true,
     "interaction_detector": false,
@@ -31,7 +46,6 @@
     "keywords": "maven|stackoverflow|github",
     "nlp_model": "artemis_java_model.bin"
   },
-
   "NET": {
     "name": "Net",
     "objects_internal_type": [

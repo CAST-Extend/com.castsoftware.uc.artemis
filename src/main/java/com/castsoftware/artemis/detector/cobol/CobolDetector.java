@@ -11,13 +11,13 @@
 
 package com.castsoftware.artemis.detector.cobol;
 
-import com.castsoftware.artemis.config.UserConfiguration;
-import com.castsoftware.artemis.controllers.UtilsController;
+import com.castsoftware.artemis.config.detection.DetectionProp;
 import com.castsoftware.artemis.database.Neo4jAL;
 import com.castsoftware.artemis.datasets.FrameworkNode;
 import com.castsoftware.artemis.datasets.FrameworkType;
 import com.castsoftware.artemis.detector.ADetector;
 import com.castsoftware.artemis.detector.ATree;
+import com.castsoftware.artemis.detector.DetectionCategory;
 import com.castsoftware.artemis.exceptions.google.GoogleBadResponseCodeException;
 import com.castsoftware.artemis.exceptions.neo4j.Neo4jBadNodeFormatException;
 import com.castsoftware.artemis.exceptions.neo4j.Neo4jQueryException;
@@ -29,18 +29,20 @@ import com.castsoftware.artemis.sof.SystemOfFramework;
 import com.castsoftware.artemis.sof.famililes.FamiliesFinder;
 import com.castsoftware.artemis.sof.famililes.FamilyGroup;
 import org.neo4j.graphdb.Node;
+import org.neo4j.graphdb.Result;
 import org.neo4j.graphdb.TransactionTerminatedException;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
-/** Detector for COBOL */
+/** Detector for COBOL Internal Detection : OK Find framework locally : OK Pythia : OK */
 public class CobolDetector extends ADetector {
 
-  public CobolDetector(Neo4jAL neo4jAL, String application)
+  private final List<Node> unknownNonUtilities = new ArrayList<>();
+
+  public CobolDetector(Neo4jAL neo4jAL, String application, DetectionProp detectionProperties)
       throws IOException, Neo4jQueryException {
-    super(neo4jAL, application, SupportedLanguage.COBOL);
+    super(neo4jAL, application, SupportedLanguage.COBOL, detectionProperties);
   }
 
   /**
@@ -64,32 +66,33 @@ public class CobolDetector extends ADetector {
     }
   }
 
-  public void createSystemOfFrameworks(List<FrameworkNode> frameworkNodeList) {
-    SystemOfFramework sof =
-        new SystemOfFramework(
-            this.neo4jAL, SupportedLanguage.COBOL, this.application, frameworkNodeList);
-    sof.run();
+  @Override
+  public ATree getExternalBreakdown() {
+    return null;
   }
 
-  /** Launch the detection */
+  /**
+   * Process the external candidates
+   *
+   * @throws IOException
+   */
   @Override
-  public List<FrameworkNode> launch() throws IOException, Neo4jQueryException {
+  public List<FrameworkNode> extractUtilities() throws IOException {
+    filterNodes();
 
     int numTreated = 0;
-
-    // Get configuration
-    boolean onlineMode = Boolean.parseBoolean(UserConfiguration.get("artemis.onlineMode"));
-    boolean learningMode = Boolean.parseBoolean(UserConfiguration.get("artemis.learning_mode"));
 
     neo4jAL.logInfo(String.format("Launching artemis detection for Cobol."));
     neo4jAL.logInfo(
         String.format("Investigation launched against %d objects.", toInvestigateNodes.size()));
 
-    List<Node> notDetected = new ArrayList<>();
     // Init the save
 
+    ListIterator<Node> listIterator = toInvestigateNodes.listIterator();
     try {
-      for (Node n : toInvestigateNodes) {
+      while (listIterator.hasNext()) {
+
+        Node n = listIterator.next();
         // Ignore object without a name property
         if (!n.hasProperty(IMAGING_OBJECT_NAME)) continue;
         String objectName = (String) n.getProperty(IMAGING_OBJECT_NAME);
@@ -97,12 +100,15 @@ public class CobolDetector extends ADetector {
 
         try {
           // Check if the framework is already known
-          FrameworkNode fb = FrameworkNode.findFrameworkByName(neo4jAL, objectName);
+          FrameworkNode fb =
+              FrameworkNode.findFrameworkByNameAndType(neo4jAL, objectName, internalType);
           if (fb != null) {
             neo4jAL.logInfo(
                 String.format(
                     "The object with name '%s' is already known by Artemis as a '%s'.",
                     objectName, fb.getFrameworkType()));
+          } else {
+            if (isPythiaUp) fb = findFrameworkOnPythia(objectName, internalType); // Check on pythia
           }
 
           // If the Framework is not known and the connection to google still possible, launch the
@@ -112,24 +118,19 @@ public class CobolDetector extends ADetector {
           // Parse NLP
           if (fb == null
               && googleParser != null
-              && onlineMode
+              && getOnlineMode()
               && languageProperties.getOnlineSearch()) {
+
             GoogleResult gr = googleParser.request(objectName);
             String requestResult = gr.getContent();
-            neo4jAL.logInfo(
-                " - Name of the package to search : "
-                    + objectName
-                    + "\n\t - Results : "
-                    + gr.getNumberResult()
-                    + "\n\t - Blacklisted : "
-                    + gr.isBlacklisted());
             NLPResults nlpResult = nlpEngine.getNLPResult(requestResult);
 
             // Apply a malus on Node with name containing number, exclude it
 
             fb = saveFrameworkResult(objectName, nlpResult, internalType);
+            fb.updateDetectionData(requestResult);
 
-            if (learningMode) {
+            if (getLearningMode()) {
               nlpSaver.writeNLPResult(nlpResult.getCategory(), requestResult);
             }
           }
@@ -139,9 +140,13 @@ public class CobolDetector extends ADetector {
             // If flag option is set, apply a demeter tag to the nodes considered as framework
             if (fb.getFrameworkType() == FrameworkType.FRAMEWORK) {
               String cat = fb.getCategory();
-              UtilsController.applyDemeterTag(neo4jAL, n, cat);
-            } else {
-              notDetected.add(n);
+              String description = fb.getDescription();
+              applyNodeProperty(n, DetectionCategory.KNOWN_UTILITY);
+              applyDescriptionProperty(n, description);
+              applyCategory(n, cat);
+              //applyDemeterTags(n, cat, detectionProp.getKnownUtilities());
+
+              listIterator.remove(); // Remove the node from the to investigate list
             }
 
             // Increment the number of detection and add it to the result lists
@@ -172,21 +177,178 @@ public class CobolDetector extends ADetector {
     } catch (TransactionTerminatedException e) {
       neo4jAL.logError("The detection was interrupted. Saving the results...", e);
     } finally {
-      reportGenerator.generate(); // generate the report
+      reportGenerator.generate(neo4jAL); // generate the report
       nlpSaver.close();
-    }
-
-    // Launch internal framework detector on remaining nodes
-    if (languageProperties.getInteractionDetector()) {
-      // getInternalFramework(neo4jAL, notDetected);
-      createSystemOfFrameworks(frameworkNodeList);
     }
 
     return frameworkNodeList;
   }
 
   @Override
-  public ATree getBreakdown() {
-    return null;
+  public void extractUnknownApp() {
+    try {
+      String corePrefix = getCoreApplication();
+      if (corePrefix.isBlank()) return;
+
+      // If the object match the Ngram
+      ListIterator<Node> itNode = toInvestigateNodes.listIterator();
+      while (itNode.hasNext()) {
+        Node n = itNode.next();
+        if (!n.hasProperty("Name")) continue;
+
+        String name = (String) n.getProperty("Name");
+
+        // The name match the nGram
+        if (name.startsWith(corePrefix)) {
+          applyNodeProperty(n, DetectionCategory.MISSING_CODE);
+          //applyDemeterTags(n, "Missing code", detectionProp.getPotentiallyMissing());
+          itNode.remove();
+        }
+      }
+
+    } catch (Neo4jQueryException e) {
+      neo4jAL.logError("Failed to retrieve the core of the application.", e);
+      return;
+    }
+  }
+
+  @Override
+  public void extractOtherApps() {
+
+    ListIterator<Node> itNode = toInvestigateNodes.listIterator();
+    Map<Node, List<String>> nodeListMap = new HashMap<>();
+
+    while (itNode.hasNext()) {
+      try {
+
+        Node n = itNode.next();
+        if (!n.hasProperty("Name") || !n.hasProperty("InternalType")) continue;
+
+        String name = (String) n.getProperty("Name");
+        String internalType = (String) n.getProperty("InternalType");
+
+        String req =
+            "MATCH (o:Object) WHERE NOT $appName in LABELS(o) AND o.Name=$nodeName AND o.InternalType=$internalType AND o.External=False "
+                + "RETURN [ x in LABELS(o) WHERE NOT x='Object'][0] as app";
+        Map<String, Object> params =
+            Map.of("appName", application, "nodeName", name, "internalType", internalType);
+
+        Result res = neo4jAL.executeQuery(req, params);
+        if (res.hasNext()) {
+          List<String> appList = new ArrayList<>();
+          while (res.hasNext()) {
+            appList.add((String) res.next().get("app"));
+          }
+          nodeListMap.put(n, appList);
+          itNode.remove();
+        }
+
+      } catch (Neo4jQueryException e) {
+        neo4jAL.logError(
+            String.format("Failed to extract node with name %s to  Unknown other applications", e));
+      }
+    }
+
+    for (Map.Entry<Node, List<String>> en : nodeListMap.entrySet()) {
+      String groupName = String.format("[%s]", String.join(", ", en.getValue()));
+      try {
+        applyNodeProperty(en.getKey(), DetectionCategory.IN_OTHERS_APPLICATIONS);
+        applyOtherApplicationsProperty(en.getKey(), groupName);
+        //applyDemeterTags(
+        //    en.getKey(), "In applications " + groupName, detectionProp.getInOtherApplication());
+      } catch (Neo4jQueryException e) {
+        neo4jAL.logError("Failed to create a 'other application' property", e);
+      }
+    }
+  }
+
+  @Override
+  public void extractUnknownNonUtilities() {
+    ListIterator<Node> itNode = toInvestigateNodes.listIterator();
+    while (itNode.hasNext()) {
+      Node n = itNode.next();
+      applyNodeProperty(n, DetectionCategory.UNKNOWN_NOT_UTILITY);
+      //applyDemeterTags(n, "Unknown not utility ", detectionProp.getUnknownNonUtilities());
+      itNode.remove();
+    }
+  }
+
+  /** Get the name of the core of the application */
+  public String getCoreApplication() throws Neo4jQueryException {
+    neo4jAL.logInfo("Getting the core of");
+    String req =
+        String.format(
+            "MATCH (o:Object:`%s`) WHERE o.InternalType in $internalTypes AND o.External=False "
+                + "RETURN o.Name as name",
+            application);
+    Map<String, Object> params =
+        Map.of("internalTypes", languageProperties.getObjectsInternalType().toArray(new String[0]));
+
+    Result result = neo4jAL.executeQuery(req, params);
+    Map<String, Integer> mapName = new HashMap<>();
+
+    int nGram = 3;
+    while (result.hasNext()) {
+      String name = (String) result.next().get("name");
+
+      String gram = name.substring(0, nGram);
+      if (!mapName.containsKey(gram)) mapName.put(gram, 0);
+      mapName.computeIfPresent(gram, (key, val) -> val + 1);
+    }
+
+    // Get the core name of the application
+    Integer max = 0;
+    String corePrefix = "";
+    for (Map.Entry<String, Integer> en : mapName.entrySet()) {
+      if (max < en.getValue()) corePrefix = en.getKey();
+    }
+
+    neo4jAL.logInfo("Suspected application core under : " + corePrefix);
+
+    return corePrefix;
+  }
+
+  /** Filter and look only for unknowns utilities */
+  private void filterNodes() {
+    int removed = 0;
+    ListIterator<Node> itNode = toInvestigateNodes.listIterator();
+
+    while (itNode.hasNext()) {
+      Node n = itNode.next();
+      if (!n.hasProperty("FullName")) continue;
+
+      String name = (String) n.getProperty("FullName");
+      String internalType = (String) n.getProperty("InternalType");
+
+      if (!name.contains("Unknown")) {
+        // If the name is flag as an utility , extract it, if not in is own category
+        itNode.remove();
+        removed++;
+      }
+
+      if (isNameExcluded(n)) {
+        // If the name match unauthorized regex
+        itNode.remove();
+        removed++;
+      }
+
+      if (isInternalTypeExcluded(n)) {
+        // If the name match unauthorized regex
+        itNode.remove();
+        removed++;
+      }
+    }
+
+    neo4jAL.logInfo(
+        String.format(
+            "Filtering : %d nodes were removed. %d nodes remaining.",
+            removed, toInvestigateNodes.size()));
+  }
+
+  public void createSystemOfFrameworks(List<FrameworkNode> frameworkNodeList) {
+    SystemOfFramework sof =
+        new SystemOfFramework(
+            this.neo4jAL, SupportedLanguage.COBOL, this.application, frameworkNodeList);
+    sof.run();
   }
 }

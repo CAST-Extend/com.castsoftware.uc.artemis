@@ -13,31 +13,31 @@ package com.castsoftware.artemis.results;
 
 import com.castsoftware.artemis.datasets.FrameworkNode;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class FrameworkResult {
+  public Long id = -1L;
   public String name;
   public String description;
   public String category;
   public String type;
-  public String internalType = "";
+  public String detectionData;
+  public List<String> internalType = new ArrayList<>();
   public String location = "";
   public String discoveryDate = "";
   public Double percentageOfDetection = .0;
 
-  public FrameworkResult(String name, String description, String category, String type) {
-    this.name = name;
-    this.category = category;
-    this.description = description;
-    this.type = type;
-  }
-
   public FrameworkResult(FrameworkNode fn) {
+    if (fn.getNode() != null) id = fn.getNode().getId();
     this.name = fn.getName();
     this.category = fn.getCategory();
     this.description = fn.getDescription();
     this.type = fn.getFrameworkType().toString();
-    this.internalType = fn.getInternalType();
+    this.internalType = fn.getInternalTypes();
     this.location = fn.getLocation();
     this.discoveryDate = fn.getDiscoveryDate();
     this.percentageOfDetection = fn.getPercentageOfDetection();
+    this.detectionData = fn.getDetectionData();
   }
 }

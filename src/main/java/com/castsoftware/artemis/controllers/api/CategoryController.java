@@ -29,17 +29,11 @@ public class CategoryController {
    *
    * @return
    */
-  public static String getDefaultName() {
-    return Configuration.getBestOfAllWorlds("artemis.default_category");
-  }
+  public static String getDefaultName(Neo4jAL neo4jAL) {
+    String temp = Configuration.getBestOfAllWorlds(neo4jAL, "artemis.default_category");
+    if (temp == null || temp.isBlank()) return Configuration.get("artemis.default_category");
 
-  /**
-   * Create a Regex Node
-   *
-   * @see CategoryNode#createNode(Neo4jAL, String, String)
-   */
-  public static CategoryNode createNode(Neo4jAL neo4jAL, String name, String iconUrl) {
-    return CategoryNode.createNode(neo4jAL, name, iconUrl);
+    return temp;
   }
 
   /**
@@ -65,16 +59,6 @@ public class CategoryController {
     } else {
       return CategoryNode.createNode(neo4jAL, name, "");
     }
-  }
-
-  /**
-   * Get a specific Category Node
-   *
-   * @see CategoryNode#getNode() (Neo4jAL, Long)
-   */
-  public static CategoryNode getNodeById(Neo4jAL neo4jAL, Long idNode)
-      throws Neo4jQueryException, Neo4jBadNodeFormatException {
-    return CategoryNode.getNode(neo4jAL, idNode);
   }
 
   /**
@@ -115,5 +99,24 @@ public class CategoryController {
     CategoryNode.removeNode(neo4jAL, cn.getId());
 
     return newNode;
+  }
+
+  /**
+   * Get a specific Category Node
+   *
+   * @see CategoryNode#getNode() (Neo4jAL, Long)
+   */
+  public static CategoryNode getNodeById(Neo4jAL neo4jAL, Long idNode)
+      throws Neo4jQueryException, Neo4jBadNodeFormatException {
+    return CategoryNode.getNode(neo4jAL, idNode);
+  }
+
+  /**
+   * Create a Regex Node
+   *
+   * @see CategoryNode#createNode(Neo4jAL, String, String)
+   */
+  public static CategoryNode createNode(Neo4jAL neo4jAL, String name, String iconUrl) {
+    return CategoryNode.createNode(neo4jAL, name, iconUrl);
   }
 }

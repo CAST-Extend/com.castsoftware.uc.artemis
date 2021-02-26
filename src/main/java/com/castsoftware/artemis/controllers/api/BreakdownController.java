@@ -11,57 +11,61 @@
 
 package com.castsoftware.artemis.controllers.api;
 
+import com.castsoftware.artemis.config.detection.DetectionParameters;
+import com.castsoftware.artemis.config.detection.DetectionProp;
 import com.castsoftware.artemis.database.Neo4jAL;
 import com.castsoftware.artemis.detector.ADetector;
-import com.castsoftware.artemis.detector.ALeaf;
 import com.castsoftware.artemis.detector.ATree;
+import com.castsoftware.artemis.exceptions.file.MissingFileException;
 import com.castsoftware.artemis.exceptions.neo4j.Neo4jQueryException;
 import com.castsoftware.artemis.nlp.SupportedLanguage;
 import com.castsoftware.artemis.results.LeafResult;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.stream.Collectors;
 
 public class BreakdownController {
 
-	/**
-	 * Get the breakdown of the structure of an application, flatten as a list
-	 * @param neo4jAL Neo4j Access Layer
-	 * @param application Name of the application
-	 * @param language Language to be used
-	 * @return
-	 * @throws IOException
-	 * @throws Neo4jQueryException
-	 */
-	public static List<LeafResult> getBreakDown(
-			Neo4jAL neo4jAL, String application, String language) throws IOException, Neo4jQueryException {
-		ATree tree = getBreakDownAsTree(neo4jAL, application, language);
-		return tree.flatten().stream().map(x -> new LeafResult(x, tree.getDelimiterLeaves())).collect(Collectors.toList());
-	}
+  /**
+   * Get the breakdown of the structure of an application, flatten as a list
+   *
+   * @param neo4jAL Neo4j Access Layer
+   * @param application Name of the application
+   * @param language Language to be used
+   * @return
+   * @throws IOException
+   * @throws Neo4jQueryException
+   */
+  public static List<LeafResult> getBreakDown(Neo4jAL neo4jAL, String application, String language)
+      throws IOException, Neo4jQueryException, MissingFileException {
+    ATree tree = getBreakDownAsTree(neo4jAL, application, language);
+    return tree.flatten().stream()
+        .map(x -> new LeafResult(x, tree.getDelimiterLeaves()))
+        .collect(Collectors.toList());
+  }
 
-	/**
-	 * Get the breakdown of the structure of an application as tree
-	 * @param neo4jAL Neo4j Access Layer
-	 * @param application Name of the application
-	 * @param language Language to be used
-	 * @return
-	 * @throws IOException
-	 * @throws Neo4jQueryException
-	 */
-	public static ATree getBreakDownAsTree(
-			Neo4jAL neo4jAL, String application, String language) throws IOException, Neo4jQueryException {
+  /**
+   * Get the breakdown of the structure of an application as tree
+   *
+   * @param neo4jAL Neo4j Access Layer
+   * @param application Name of the application
+   * @param language Language to be used
+   * @return
+   * @throws IOException
+   * @throws Neo4jQueryException
+   */
+  public static ATree getBreakDownAsTree(Neo4jAL neo4jAL, String application, String language)
+      throws IOException, Neo4jQueryException, MissingFileException {
 
-		if(!SupportedLanguage.has(language)) return null;
-		SupportedLanguage sl = SupportedLanguage.getLanguage(language);
+    if (!SupportedLanguage.has(language)) return null;
+    SupportedLanguage sl = SupportedLanguage.getLanguage(language);
+    DetectionProp detectionProp = DetectionParameters.getUserOrDefault(neo4jAL);
 
-		ADetector aDetector = ADetector.getDetector(neo4jAL, application, sl);
-		ATree tree = aDetector.getBreakdown();
-		if(tree == null) return null;
+    ADetector aDetector = ADetector.getDetector(neo4jAL, application, sl, detectionProp);
+    ATree tree = aDetector.getExternalBreakdown();
+    if (tree == null) return null;
 
-		return tree;
-	}
+    return tree;
+  }
 }

@@ -11,8 +11,8 @@
 
 package com.castsoftware.artemis.controllers.api;
 
-import com.castsoftware.artemis.config.LanguageConfiguration;
-import com.castsoftware.artemis.config.LanguageProp;
+import com.castsoftware.artemis.config.detection.LanguageConfiguration;
+import com.castsoftware.artemis.config.detection.LanguageProp;
 
 import java.util.List;
 import java.util.stream.Collectors;

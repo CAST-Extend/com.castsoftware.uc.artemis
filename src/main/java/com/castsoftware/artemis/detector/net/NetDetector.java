@@ -11,6 +11,7 @@
 
 package com.castsoftware.artemis.detector.net;
 
+import com.castsoftware.artemis.config.detection.DetectionProp;
 import com.castsoftware.artemis.database.Neo4jAL;
 import com.castsoftware.artemis.datasets.FrameworkNode;
 import com.castsoftware.artemis.detector.ADetector;
@@ -23,43 +24,52 @@ import org.neo4j.graphdb.Node;
 import java.io.IOException;
 import java.util.List;
 
-public class NetDetector  extends ADetector  {
-	/**
-	 * Detector constructor
-	 *
-	 * @param neo4jAL     Neo4j Access Layer
-	 * @param application Name of the application
-	 * @throws IOException
-	 * @throws Neo4jQueryException
-	 */
-	public NetDetector(Neo4jAL neo4jAL, String application) throws IOException, Neo4jQueryException {
-		super(neo4jAL, application, SupportedLanguage.NET);
-	}
+public class NetDetector extends ADetector {
+  /**
+   * Detector constructor
+   *
+   * @param neo4jAL Neo4j Access Layer
+   * @param application Name of the application
+   * @throws IOException
+   * @throws Neo4jQueryException
+   */
+  public NetDetector(Neo4jAL neo4jAL, String application, DetectionProp detectionProperties)
+      throws IOException, Neo4jQueryException {
+    super(neo4jAL, application, SupportedLanguage.NET, detectionProperties);
+  }
 
-	@Override
-	public List<FrameworkNode> launch() throws IOException, Neo4jQueryException {
-		return null;
-	}
+  @Override
+  public ATree getExternalBreakdown() {
+    FrameworkTree frameworkTree = new FrameworkTree();
 
-	@Override
-	public ATree getBreakdown() {
-		FrameworkTree frameworkTree = new FrameworkTree();
+    // Top Bottom approach
+    for (Node n : toInvestigateNodes) {
 
-		// Top Bottom approach
-		for (Node n : toInvestigateNodes) {
+      // Get node in Java Classes
+      if (!n.hasProperty("Level") || ((String) n.getProperty("Level")).equals("C# Class")) continue;
 
-			// Get node in Java Classes
-			if (!n.hasProperty("Level") || ((String) n.getProperty("Level")).equals("C# Class"))
-				continue;
+      if (!n.hasProperty(IMAGING_OBJECT_FULL_NAME)) continue;
+      String fullName = (String) n.getProperty(IMAGING_OBJECT_FULL_NAME);
+      String objectName = (String) n.getProperty(IMAGING_OBJECT_NAME);
+      String internalType = (String) n.getProperty(IMAGING_INTERNAL_TYPE);
 
-			if (!n.hasProperty(IMAGING_OBJECT_FULL_NAME)) continue;
-			String fullName = (String) n.getProperty(IMAGING_OBJECT_FULL_NAME);
-			String objectName = (String) n.getProperty(IMAGING_OBJECT_NAME);
-			String internalType = (String) n.getProperty(IMAGING_INTERNAL_TYPE);
+      frameworkTree.insert(fullName);
+    }
 
-			frameworkTree.insert(fullName);
-		}
+    return frameworkTree;
+  }
 
-		return frameworkTree;
-	}
+  @Override
+  public List<FrameworkNode> extractUtilities() throws IOException, Neo4jQueryException {
+    return null;
+  }
+
+  @Override
+  public void extractUnknownApp() {}
+
+  @Override
+  public void extractOtherApps() {}
+
+  @Override
+  public void extractUnknownNonUtilities() {}
 }

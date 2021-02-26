@@ -14,6 +14,8 @@ package com.castsoftware.artemis.repositories.maven;
 import com.castsoftware.artemis.repositories.SPackage;
 import org.json.JSONObject;
 
+import java.util.Arrays;
+
 public class MavenPackage implements SPackage {
 
   private static final String TYPE = "MAVEN PACKAGE";
@@ -29,6 +31,26 @@ public class MavenPackage implements SPackage {
     this.name = name;
     this.fullName = fullName;
     this.version = version;
+  }
+
+  @Override
+  public String toString() {
+    return "MavenPackage{"
+        + "groupId='"
+        + groupId
+        + '\''
+        + ", name='"
+        + name
+        + '\''
+        + ", fullName='"
+        + fullName
+        + '\''
+        + ", version='"
+        + version
+        + '\''
+        + ", tags="
+        + Arrays.toString(tags)
+        + "} \n";
   }
 
   public String getGroupId() {

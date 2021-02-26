@@ -11,18 +11,18 @@
 
 package com.castsoftware.artemis.results;
 
-import com.castsoftware.artemis.detector.ALeaf;
+import com.castsoftware.artemis.nlp.SupportedLanguage;
 
-public class LeafResult {
-  public Long id;
-  public String name;
-  public Long parentId;
-  public String delimiter;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
-  public LeafResult(ALeaf aLeaf, String delimiter) {
-    this.id = aLeaf.getId();
-    this.name = aLeaf.getName();
-    this.parentId = aLeaf.getParentId();
-    this.delimiter = delimiter;
+public class DetectionCandidateResult {
+  public String application;
+  public List<String> languages;
+
+  public DetectionCandidateResult(String application, List<SupportedLanguage> languages) {
+    this.application = application;
+    this.languages = languages.stream().map(Objects::toString).collect(Collectors.toList());
   }
 }
