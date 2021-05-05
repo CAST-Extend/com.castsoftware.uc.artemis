@@ -18,6 +18,7 @@ import com.castsoftware.artemis.database.Neo4jAL;
 import com.castsoftware.artemis.datasets.FrameworkNode;
 import com.castsoftware.artemis.datasets.FrameworkType;
 import com.castsoftware.artemis.detector.ADetector;
+import com.castsoftware.artemis.detector.ATree;
 import com.castsoftware.artemis.exceptions.google.GoogleBadResponseCodeException;
 import com.castsoftware.artemis.exceptions.neo4j.Neo4jBadNodeFormatException;
 import com.castsoftware.artemis.exceptions.neo4j.Neo4jBadRequestException;
@@ -56,9 +57,9 @@ public class JavaDetector extends ADetector {
    * @throws IOException
    * @throws Neo4jQueryException
    */
-  public JavaDetector(Neo4jAL neo4jAL, String application, DetectionProp detectionProperties)
+  public JavaDetector(Neo4jAL neo4jAL, String application)
       throws IOException, Neo4jQueryException {
-    super(neo4jAL, application, SupportedLanguage.JAVA, detectionProperties);
+    super(neo4jAL, application, SupportedLanguage.JAVA);
     this.externalTree = getExternalBreakdown();
     this.internalTree = getInternalBreakDown();
     this.corePrefix = "";
@@ -67,18 +68,16 @@ public class JavaDetector extends ADetector {
   @Override
   public FrameworkTree getExternalBreakdown() {
     // Filter nodes for java
-    ListIterator<Node> listIterator = toInvestigateNodes.listIterator();
-    while (listIterator.hasNext()) {
-      Node n = listIterator.next();
-      // Get node in Java Classes
-      if (!n.hasProperty("Level") || ((String) n.getProperty("Level")).equals("Java Class")) {
-        listIterator.remove();
-        continue;
-      }
-    }
-
+    // Get node in Java Classes
+    toInvestigateNodes.removeIf(n -> !n.hasProperty("Level") || ! ((String) n.getProperty("Level")).equals("Java Class"));
+    neo4jAL.logInfo("Java breakdown on : " + toInvestigateNodes.size());
     externalTree = createTree(toInvestigateNodes);
     return externalTree;
+  }
+
+  @Override
+  public ATree getInternalBreakdown() throws Neo4jQueryException {
+    return getInternalBreakDown();
   }
 
   @Override
@@ -102,7 +101,7 @@ public class JavaDetector extends ADetector {
         else {
           String fullName2 = String.join(".", Arrays.copyOfRange(split, 0, 2));
           FrameworkNode fn =
-              FrameworkController.findFrameworkByNameAndType(neo4jAL, fullName2, internalType);
+              FrameworkController.findMatchingFrameworkByType(neo4jAL, fullName2, internalType);
 
           // Get on Pythia
           if(fn == null) {
@@ -121,7 +120,7 @@ public class JavaDetector extends ADetector {
         else {
           String fullName3 = String.join(".", Arrays.copyOfRange(split, 0, 3));
           FrameworkNode fn =
-              FrameworkController.findFrameworkByNameAndType(neo4jAL, fullName3, internalType);
+              FrameworkController.findMatchingFrameworkByType(neo4jAL, fullName3, internalType);
 
           // Get on Pythia
           if(fn == null) {
@@ -213,8 +212,8 @@ public class JavaDetector extends ADetector {
           functionalModules.add(fm);
         }
 
-        if (treeLeaf.getNumChildren() >= biggestBranch) {
-          biggestBranch = treeLeaf.getNumChildren();
+        if (treeLeaf.getCount() >= biggestBranch) {
+          biggestBranch = treeLeaf.getCount().intValue();
           bestMatch = treeLeaf.getFullName();
         }
       } catch (Neo4jQueryException e) {
@@ -234,10 +233,15 @@ public class JavaDetector extends ADetector {
     // Convert the functional modules found to FrameworkNodes
     List<FrameworkNode> frameworkNodes = new ArrayList<>();
     for (FunctionalModule fm : functionalModules) {
+      String pattern = fm.getIdentifier()+"\\.*";
+      Boolean isRegex = true;
+
       FrameworkNode fn =
           new FrameworkNode(
               neo4jAL,
               fm.getIdentifier(),
+              pattern,
+              isRegex,
               new SimpleDateFormat("dd-MM-yyyy").format(new Date()),
               "Internal Match " + application,
               "Internal framework " + companyName,
@@ -280,10 +284,15 @@ public class JavaDetector extends ADetector {
           String.format(
               "Perfect match found on maven for package %s. Candidate : %s.",
               ftl.getFullName(), candidate.toString()));
+      String pattern  = ftl.getFullName() + "\\.*";
+      Boolean isRegex = true;
+
       FrameworkNode fb =
           new FrameworkNode(
               neo4jAL,
               ftl.getFullName(),
+              pattern,
+              isRegex,
               new SimpleDateFormat("dd-MM-yyyy").format(new Date()),
               "Maven " + candidate.getFullName(),
               candidate.getFullName(),
@@ -399,6 +408,12 @@ public class JavaDetector extends ADetector {
     return fb;
   }
 
+  /**
+   * Assign Results to a framework node
+   * @param name Name of the Framework
+   * @param results Type of results
+   * @return
+   */
   public FrameworkNode assignResult(String name, NLPResults results) {
     DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
     Date date = Calendar.getInstance().getTime();
@@ -423,10 +438,15 @@ public class JavaDetector extends ADetector {
       detectionScore = prob[0];
     }
 
+    String pattern = name;
+    Boolean isRegex = false;
+
     FrameworkNode fb =
         new FrameworkNode(
             neo4jAL,
             name,
+            pattern,
+            isRegex,
             strDate,
             "No location discovered",
             "",
@@ -582,11 +602,13 @@ public class JavaDetector extends ADetector {
     this.internalTree = new FrameworkTree();
 
     String fullName;
+
     for (Node n : nodeList) {
       if (!n.hasProperty(IMAGING_OBJECT_FULL_NAME)) continue;
+
       fullName = (String) n.getProperty(IMAGING_OBJECT_FULL_NAME);
 
-      internalTree.insert(fullName);
+      internalTree.insert(fullName, n);
     }
 
     return internalTree;
@@ -608,8 +630,9 @@ public class JavaDetector extends ADetector {
       }
 
       if (!n.hasProperty(IMAGING_OBJECT_FULL_NAME)) continue;
+
       fullName = (String) n.getProperty(IMAGING_OBJECT_FULL_NAME);
-      frameworkTree.insert(fullName);
+      frameworkTree.insert(fullName, n);
     }
 
     return frameworkTree;

@@ -13,16 +13,31 @@ package com.castsoftware.artemis.results;
 
 import com.castsoftware.artemis.detector.ALeaf;
 
+import java.util.List;
+
 public class LeafResult {
   public Long id;
   public String name;
+  public String fullName;
   public Long parentId;
+  public Long count;
   public String delimiter;
+  public List<String> objectTypes;
+  public List<String> levels;
+  public List<String> modules;
+  public List<String> subsets;
 
   public LeafResult(ALeaf aLeaf, String delimiter) {
     this.id = aLeaf.getId();
     this.name = aLeaf.getName();
+    this.fullName = aLeaf.getFullName();
+    this.count = aLeaf.getCount();
     this.parentId = aLeaf.getParentId();
     this.delimiter = delimiter;
+
+    this.objectTypes = aLeaf.getObjectTypes();
+    this.levels = aLeaf.getLevels();
+    this.modules = aLeaf.getModules();
+    this.subsets = aLeaf.getSubsets();
   }
 }

@@ -18,12 +18,15 @@ import com.castsoftware.artemis.datasets.FrameworkType;
 import com.castsoftware.artemis.detector.ADetector;
 import com.castsoftware.artemis.detector.ATree;
 import com.castsoftware.artemis.detector.DetectionCategory;
+import com.castsoftware.artemis.detector.java.FrameworkTree;
+import com.castsoftware.artemis.detector.java.FrameworkTreeLeaf;
 import com.castsoftware.artemis.exceptions.google.GoogleBadResponseCodeException;
 import com.castsoftware.artemis.exceptions.neo4j.Neo4jBadNodeFormatException;
 import com.castsoftware.artemis.exceptions.neo4j.Neo4jQueryException;
 import com.castsoftware.artemis.exceptions.nlp.NLPBlankInputException;
 import com.castsoftware.artemis.nlp.SupportedLanguage;
 import com.castsoftware.artemis.nlp.model.NLPResults;
+import com.castsoftware.artemis.nlp.parser.GoogleParser;
 import com.castsoftware.artemis.nlp.parser.GoogleResult;
 import com.castsoftware.artemis.sof.SystemOfFramework;
 import com.castsoftware.artemis.sof.famililes.FamiliesFinder;
@@ -40,9 +43,9 @@ public class CobolDetector extends ADetector {
 
   private final List<Node> unknownNonUtilities = new ArrayList<>();
 
-  public CobolDetector(Neo4jAL neo4jAL, String application, DetectionProp detectionProperties)
+  public CobolDetector(Neo4jAL neo4jAL, String application)
       throws IOException, Neo4jQueryException {
-    super(neo4jAL, application, SupportedLanguage.COBOL, detectionProperties);
+    super(neo4jAL, application, SupportedLanguage.COBOL);
   }
 
   /**
@@ -66,8 +69,41 @@ public class CobolDetector extends ADetector {
     }
   }
 
+  /**
+   * Create a Cobol Tree using cobol programs names
+   * @param nodeList List of nodes
+   * @return
+   */
+  public CobolFrameworkTree createTree(List<Node> nodeList) {
+    CobolFrameworkTree frameworkTree = new CobolFrameworkTree();
+
+    // Top Bottom approach
+    String fullName;
+    ListIterator<Node> listIterator = nodeList.listIterator();
+    while (listIterator.hasNext()) {
+      Node n = listIterator.next();
+
+      // Get cobol class
+      if (!n.hasProperty("Type") || !((String) n.getProperty("Type")).equals("Cobol Program")) {
+        continue;
+      }
+
+      if (!n.hasProperty(IMAGING_OBJECT_NAME)) continue;
+      fullName = (String) n.getProperty(IMAGING_OBJECT_NAME);
+      frameworkTree.insert(fullName, n);
+    }
+
+    return frameworkTree;
+  }
+
+
   @Override
   public ATree getExternalBreakdown() {
+    return createTree(toInvestigateNodes);
+  }
+
+  @Override
+  public ATree getInternalBreakdown() {
     return null;
   }
 
@@ -125,10 +161,9 @@ public class CobolDetector extends ADetector {
             String requestResult = gr.getContent();
             NLPResults nlpResult = nlpEngine.getNLPResult(requestResult);
 
-            // Apply a malus on Node with name containing number, exclude it
-
             fb = saveFrameworkResult(objectName, nlpResult, internalType);
             fb.updateDetectionData(requestResult);
+            fb.updateLocation(GoogleParser.getBestUrl(languageProperties, gr.getUrls()));
 
             if (getLearningMode()) {
               nlpSaver.writeNLPResult(nlpResult.getCategory(), requestResult);

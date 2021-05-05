@@ -9,7 +9,7 @@
  *
  */
 
-package com.castsoftware.artemis.detector.java;
+package com.castsoftware.artemis.detector.cobol;
 
 import com.castsoftware.artemis.detector.ALeaf;
 
@@ -17,21 +17,20 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class FrameworkTreeLeaf extends ALeaf {
+public class CobolFrameworkTreeLeaf extends ALeaf {
 
-  private List<FrameworkTreeLeaf> children;
+  private List<CobolFrameworkTreeLeaf> children;
   private double[] detectionResults;
   private Integer depth;
   private boolean framework;
 
-  public FrameworkTreeLeaf(String name, String fullName) {
+  public CobolFrameworkTreeLeaf(String name, String fullName) {
     super(fullName, name);
     this.children = Collections.synchronizedList(new ArrayList<>());
     this.framework = false;
     this.detectionResults = new double[0];
     this.depth = 0;
   }
-
 
   public double[] getDetectionResults() {
     return detectionResults;
@@ -61,11 +60,11 @@ public class FrameworkTreeLeaf extends ALeaf {
     return name;
   }
 
-  public List<FrameworkTreeLeaf> getChildren() {
+  public List<CobolFrameworkTreeLeaf> getChildren() {
     return children;
   }
 
-  public void addLeaf(FrameworkTreeLeaf leaf) {
+  public void addLeaf(CobolFrameworkTreeLeaf leaf) {
     this.children.add(leaf);
   }
 }

@@ -16,6 +16,8 @@ package com.castsoftware.artemis.io;
 
 import com.castsoftware.artemis.config.Configuration;
 import com.castsoftware.artemis.database.Neo4jAL;
+import com.castsoftware.artemis.datasets.CategoryNode;
+import com.castsoftware.artemis.datasets.FrameworkNode;
 import com.castsoftware.artemis.exceptions.ProcedureException;
 import com.castsoftware.artemis.exceptions.file.FileCorruptedException;
 import com.castsoftware.artemis.exceptions.neo4j.Neo4jQueryException;
@@ -26,6 +28,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetTime;
@@ -33,6 +36,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -55,6 +59,14 @@ public class Importer {
   private static final String FRAMEWORK_ID = Configuration.get("artemis.frameworkNode.name");
   private static final String FRAMEWORK_LABEL = Configuration.get("artemis.frameworkNode.label");
 
+  // Unique property filter
+  Map<String, List<String>> mapUniqueProperty = Map.of(
+          FrameworkNode.getLabel(), List.of(FrameworkNode.getPatternProperty()), // Unique on Pattern Property
+          CategoryNode.getLabel(), List.of(CategoryNode.getNameProperty())
+  );
+
+
+
   // Members
   private Long countLabelCreated;
   private Long countRelationTypeCreated;
@@ -65,15 +77,10 @@ public class Importer {
   // Binding map between csv ID and Neo4j created nodes. Only the Node id is stored here, to limit
   // the usage of heap memory.
   private Map<Long, Long> idBindingMap;
-
-  private GraphDatabaseService db;
-  private Log log;
-  private Transaction transaction;
+  private final Neo4jAL neo4jAL;
 
   public Importer(Neo4jAL neo4jAL) {
-    this.db = neo4jAL.getDb();
-    this.log = neo4jAL.getLogger();
-    this.transaction = neo4jAL.getTransaction();
+    this.neo4jAL = neo4jAL;
 
     // Init members
     this.countLabelCreated = 0L;
@@ -84,17 +91,17 @@ public class Importer {
     this.idBindingMap = new HashMap<>();
   }
 
-  public Stream<String> load(String pathToZipFileName) throws ProcedureException {
+  public Stream<String> load(Path pathToZipFileName) throws ProcedureException {
     MESSAGE_QUEUE.clear();
 
     try {
-      File zipFile = new File(pathToZipFileName);
+      File zipFile = pathToZipFileName.toFile();
 
       // End the procedure if the path specified isn't valid
       if (!zipFile.exists()) {
         MESSAGE_QUEUE.add(
             "No zip file found at path "
-                .concat(pathToZipFileName)
+                .concat(pathToZipFileName.toString())
                 .concat(". Please check the path provided"));
         return MESSAGE_QUEUE.stream();
       }
@@ -151,13 +158,13 @@ public class Importer {
             nodeBuffers.put(br, filename);
           } else {
             ignoredFile++;
-            log.error(
+            neo4jAL.logError(
                 String.format("Unrecognized file with name '%s' in zip file. Skipped.", filename));
           }
         } catch (Exception e) {
-          log.error(
+          neo4jAL.logError(
               "An error occurred trying to process entry with file name ".concat(filename), e);
-          log.error("This entry will be skipped");
+          neo4jAL.logError("This entry will be skipped");
         }
       }
 
@@ -168,7 +175,7 @@ public class Importer {
           treatNodeBuffer(labelAsString, pair.getKey());
           countLabelCreated++;
         } catch (FileCorruptedException e) {
-          log.error("The file".concat(pair.getValue()).concat(" seems to be corrupted. Skipped."));
+          this.neo4jAL.logError("The file".concat(pair.getValue()).concat(" seems to be corrupted. Skipped."));
           ignoredFile++;
         }
       }
@@ -179,10 +186,10 @@ public class Importer {
           treatRelBuffer(relAsString, pair.getKey());
           countRelationTypeCreated++;
         } catch (FileCorruptedException e) {
-          log.error("The file".concat(pair.getValue()).concat(" seems to be corrupted. Skipped."));
+          neo4jAL.logError("The file".concat(pair.getValue()).concat(" seems to be corrupted. Skipped."));
           ignoredFile++;
         } catch (Neo4jQueryException e) {
-          log.error("Operation failed, check the stack trace for more information.");
+          neo4jAL.logError("Operation failed, check the stack trace for more information.");
           throw e;
         }
       }
@@ -236,7 +243,7 @@ public class Importer {
       try {
         createNode(label, headerList, values);
       } catch (Exception | Neo4jQueryException e) {
-        log.error(
+        neo4jAL.logError(
             "An error occurred during creation of node with label : "
                 .concat(associatedLabel)
                 .concat(" and values : ")
@@ -302,37 +309,68 @@ public class Importer {
    */
   private void createNode(Label label, List<String> headers, List<String> values)
       throws Neo4jQueryException {
+
+    // Skip empty rows
+    if(values.size() == 0) return;
+
     int indexCol = headers.indexOf(INDEX_COL);
     Long id = Long.parseLong(values.get(indexCol));
 
+    // Apply a filter on unique properties
+    List<String> uniqueProperties = new ArrayList<>();
+    if(mapUniqueProperty.containsKey(label.name())) {
+      uniqueProperties = mapUniqueProperty.get(label.name());
+      neo4jAL.logInfo(
+          String.format(
+              "Node with label %s will be filtered on %s",
+              label.name(), String.join(", ", uniqueProperties)));
+    }
+
     try {
       // Check if the node already exist
-      String nameId = "";
       int minSize = Math.min(values.size(), headers.size());
-      for (int i = 0; i < minSize; i++) {
-        if (headers.get(i).equals(FRAMEWORK_ID)) {
-          nameId = (String) values.get(i);
-          break;
-        }
-      }
 
-      // If the node has a unique property identifier
-      if (!nameId.isEmpty()) {
-        String req =
-            String.format("MATCH (o:%s) WHERE o.Name='%s' return o", FRAMEWORK_LABEL, nameId);
-        Result res = transaction.execute(req);
 
-        // If the request match a node, skip the upload of a similar node
-        if (res.hasNext()) {
-          return;
+      // If the node has a unique property identifier verify that it doesn't already exists
+      if (!uniqueProperties.isEmpty()) {
+
+        var wrapperParameters = new Object(){ Map<String, Object> parameters = new HashMap<>(); };
+        final Integer[] paramPosition = {1};
+
+        String filter = uniqueProperties.stream()
+                .map(x -> {
+                  if(!headers.contains(x)) return "";
+                  String val = values.get(headers.indexOf(x));
+
+                  String toReq = String.format("o.%s=$val%d", x, paramPosition[0]);
+
+                  wrapperParameters.parameters.put(String.format("val%d", paramPosition[0]), val);
+                  paramPosition[0]++;
+
+                  return toReq; })
+                .filter(item-> !item.isEmpty()).collect(Collectors.joining(" AND "));
+
+
+        if(!filter.isBlank()) {
+          String req =
+                  String.format("MATCH (o:%s) WHERE %s return o", label.name(), filter);
+          neo4jAL.logInfo("Merging query : " + req);
+          Result res = this.neo4jAL.executeQuery(req, wrapperParameters.parameters);
+
+          // If the request match a node, skip the upload of a similar node
+          if (res.hasNext()) {
+            return;
+          }
         }
+
       }
 
       // No node with similar name was detected, insert a new one
-      Node n = this.transaction.createNode(label);
+      Node n = this.neo4jAL.createNode(label);
       for (int i = 0; i < minSize; i++) {
         if (i == indexCol || values.get(i).isEmpty()) continue; // Index col or empty value
         Object extractedVal = getNeo4jType(values.get(i));
+
         n.setProperty(headers.get(i), extractedVal);
       }
 
@@ -372,8 +410,8 @@ public class Importer {
     Node destNode = null;
 
     try {
-      srcNode = this.transaction.getNodeById(srcNodeId);
-      destNode = this.transaction.getNodeById(destNodeId);
+      srcNode = this.neo4jAL.getNodeById(srcNodeId);
+      destNode = this.neo4jAL.getNodeById(destNodeId);
     } catch (Exception e) {
       throw new Neo4jQueryException("Impossible to retrieve Dest/Src Node.", e, "IMPOxCRER01");
     }
@@ -405,6 +443,9 @@ public class Importer {
    */
   private Object getNeo4jType(String value) {
 
+    // Remove Sanitization
+    value =  value.strip().replaceAll("^\"+|\"+$", "");
+
     // Long
     try {
       return Long.parseLong(value);
@@ -417,7 +458,7 @@ public class Importer {
     } catch (NumberFormatException ignored) {
     }
 
-    // Integer
+    // Integer : Return Long value
     try {
       return ((Integer) Integer.parseInt(value)).longValue();
     } catch (NumberFormatException ignored) {
@@ -443,18 +484,19 @@ public class Importer {
     // https://neo4j.com/docs/cypher-manual/current/syntax/temporal/ )
     DateTimeFormatter formatter =
         DateTimeFormatter.ofPattern(
-            "[YYYY-MM-DD]"
-                + "[YYYYMMDD]"
-                + "[YYYY-MM]"
-                + "[YYYYMM]"
-                + "[YYYY-Www-D]"
-                + "[YYYY- W ww]"
-                + "[YYYY W ww]"
-                + "[YYYY- Q q-DD]"
-                + "[YYYY Q q]"
-                + "[YYYY-DDD]"
-                + "[YYYYDDD]"
-                + "[YYYY]");
+            "[yyyy-MM-dd]"
+                + "[yyyy-MM-dd hh:mm:ss]"
+                + "[yyyyMMdd]"
+                + "[yyyy-MM]"
+                + "[yyyyMM]"
+                + "[yyyy-Www-D]"
+                + "[yyyy- W ww]"
+                + "[yyyy W ww]"
+                + "[yyyy- Q q-DD]"
+                + "[yyyy Q q]"
+                + "[yyyy-DDD]"
+                + "[yyyyDDD]"
+                + "[yyyy]");
 
     // LocalDate
     try {
@@ -477,13 +519,18 @@ public class Importer {
     } catch (DateTimeParseException ignored) {
     }
 
+    // Array list
+    try {
+      if (value.matches("^\\[([\\w\\s]*,?)+\\]")) {
+        // Remove brackets
+        return value.replaceAll("[|]", "").strip().split(",");
+      }
+    } catch (Exception ignored) {
+    }
+
     // Char
     if (value.length() == 1) return value.charAt(0);
 
-    // Remove Sanitization
-    value = value.replaceAll("(^\\s\")|(\\s\"\\s?$)", "");
-
-    log.info("Value inserted : " + value);
     // String
     return value;
   }
